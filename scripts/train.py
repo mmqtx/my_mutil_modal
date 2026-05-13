@@ -86,6 +86,9 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
         label_query_layers=int(model_cfg.get("label_query_layers", 1)),
         label_query_heads=int(model_cfg.get("label_query_heads", 8)),
         label_query_weight=float(model_cfg.get("label_query_weight", 0.5)),
+        signal_local_branch=bool(model_cfg.get("signal_local_branch", False)),
+        signal_local_channels=int(model_cfg.get("signal_local_channels", 192)),
+        signal_local_weight=float(model_cfg.get("signal_local_weight", 0.5)),
     )
     if not no_pretrained and model_cfg.get("signal_checkpoint"):
         load_gem_signal_weights(model, model_cfg["signal_checkpoint"])

@@ -159,6 +159,55 @@ class LabelQueryDecoder(nn.Module):
         return self.head(self.norm(decoded)).squeeze(-1)
 
 
+class LocalMorphologyBlock(nn.Module):
+    def __init__(self, channels: int, dilation: int, dropout: float) -> None:
+        super().__init__()
+        padding = dilation * 4
+        self.net = nn.Sequential(
+            nn.Conv1d(channels, channels, kernel_size=9, padding=padding, dilation=dilation, groups=channels, bias=False),
+            nn.GroupNorm(8, channels),
+            nn.GELU(),
+            nn.Conv1d(channels, channels, kernel_size=1, bias=False),
+            nn.GroupNorm(8, channels),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.net(x)
+
+
+class SignalLocalEncoder(nn.Module):
+    """Lightweight waveform branch for local morphology that a global CLS token can miss."""
+
+    def __init__(self, out_dim: int, channels: int = 192, dropout: float = 0.1) -> None:
+        super().__init__()
+        self.stem = nn.Sequential(
+            nn.Conv1d(12, channels, kernel_size=15, stride=2, padding=7, bias=False),
+            nn.GroupNorm(8, channels),
+            nn.GELU(),
+        )
+        self.blocks = nn.Sequential(
+            LocalMorphologyBlock(channels, dilation=1, dropout=dropout),
+            nn.AvgPool1d(kernel_size=2, stride=2),
+            LocalMorphologyBlock(channels, dilation=2, dropout=dropout),
+            nn.AvgPool1d(kernel_size=2, stride=2),
+            LocalMorphologyBlock(channels, dilation=4, dropout=dropout),
+            LocalMorphologyBlock(channels, dilation=8, dropout=dropout),
+        )
+        self.proj = nn.Sequential(
+            nn.LayerNorm(channels * 2),
+            nn.Linear(channels * 2, out_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, signal: torch.Tensor) -> torch.Tensor:
+        x = self.blocks(self.stem(signal))
+        pooled = torch.cat([x.mean(dim=-1), x.amax(dim=-1)], dim=-1)
+        return self.proj(pooled)
+
+
 class HiFuseECG(nn.Module):
     def __init__(
         self,
@@ -177,6 +226,9 @@ class HiFuseECG(nn.Module):
         label_query_layers: int = 1,
         label_query_heads: int = 8,
         label_query_weight: float = 0.5,
+        signal_local_branch: bool = False,
+        signal_local_channels: int = 192,
+        signal_local_weight: float = 0.5,
     ) -> None:
         super().__init__()
         self.signal_encoder = EcgTransformer(
@@ -192,6 +244,7 @@ class HiFuseECG(nn.Module):
         self.image_encoder = CLIPVisionEncoder(clip_model_path)
         self.token_fusion_enabled = token_fusion
         self.label_query_enabled = label_query_fusion
+        self.signal_local_enabled = signal_local_branch
 
         if freeze_signal_encoder:
             self.signal_encoder.lock(unlocked_groups=signal_unlocked_groups)
@@ -232,6 +285,13 @@ class HiFuseECG(nn.Module):
             else None
         )
         self.label_query_weight = float(label_query_weight)
+        self.signal_local_encoder = (
+            SignalLocalEncoder(fusion_dim, channels=signal_local_channels, dropout=dropout)
+            if signal_local_branch
+            else None
+        )
+        self.signal_local_classifier = nn.Linear(fusion_dim, num_classes) if signal_local_branch else None
+        self.signal_local_weight = float(signal_local_weight)
         self.classifier = nn.Sequential(
             nn.LayerNorm(fusion_dim),
             nn.Linear(fusion_dim, fusion_dim),
@@ -271,6 +331,11 @@ class HiFuseECG(nn.Module):
             img = torch.where(keep > 1 - modality_dropout / 2, torch.zeros_like(img), img)
 
         fused, gate = self.fusion(sig, img)
+        local_feat = None
+        if self.signal_local_enabled:
+            assert self.signal_local_encoder is not None
+            local_feat = self.signal_local_encoder(signal)
+            fused = fused + self.signal_local_weight * local_feat
         if self.token_fusion_enabled:
             sig_tokens = self.signal_token_proj(sig_tokens_raw[:, 1:])
             img_tokens = self.image_token_proj(img_tokens_raw[:, 1:])
@@ -282,6 +347,9 @@ class HiFuseECG(nn.Module):
             assert self.label_query_decoder is not None
             label_logits = self.label_query_decoder(fused, sig_tokens, img_tokens)
             logits = logits + self.label_query_weight * label_logits
+        if local_feat is not None:
+            assert self.signal_local_classifier is not None
+            logits = logits + self.signal_local_weight * self.signal_local_classifier(local_feat)
         sig_z = F.normalize(self.signal_contrast(sig_raw), dim=-1)
         img_z = F.normalize(self.image_contrast(img_raw), dim=-1)
         return {
