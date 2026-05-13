@@ -41,4 +41,4 @@ train:
   asl_clip: 0.05
   grad_clip_norm: 1.0
   early_stop_patience: 5
-  ddp_find_unused_parameters: false
+  ddp_find_unused_parameters: true
