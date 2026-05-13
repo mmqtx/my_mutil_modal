@@ -230,7 +230,7 @@ def build_dataloaders(cfg: Dict[str, Any], limit: Optional[int] = None) -> Dict[
             shuffle=shuffle,
             num_workers=int(train_cfg.get("num_workers", 4)),
             pin_memory=torch.cuda.is_available(),
-            drop_last=split == "train",
+            drop_last=split == "train" and len(ds) >= int(train_cfg["batch_size"]),
             persistent_workers=int(train_cfg.get("num_workers", 4)) > 0,
         )
     return loaders
