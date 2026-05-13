@@ -33,6 +33,18 @@ class CLIPVisionEncoder(nn.Module):
         for p in self.parameters():
             p.requires_grad = False
 
+    def unlock_last_layers(self, n_layers: int) -> None:
+        if n_layers <= 0:
+            return
+        vision = self.vision_model.vision_model
+        for layer in vision.encoder.layers[-n_layers:]:
+            for p in layer.parameters():
+                p.requires_grad = True
+        post_layernorm = getattr(vision, "post_layernorm", None)
+        if post_layernorm is not None:
+            for p in post_layernorm.parameters():
+                p.requires_grad = True
+
 
 class GatedResidualFusion(nn.Module):
     def __init__(self, dim: int, dropout: float) -> None:
@@ -107,6 +119,8 @@ class HiFuseECG(nn.Module):
         dropout: float = 0.15,
         freeze_signal_encoder: bool = True,
         freeze_image_encoder: bool = True,
+        signal_unlocked_groups: int = 0,
+        image_unfreeze_last_n: int = 0,
         token_fusion: bool = False,
         token_fusion_layers: int = 2,
         token_fusion_heads: int = 8,
@@ -126,9 +140,10 @@ class HiFuseECG(nn.Module):
         self.token_fusion_enabled = token_fusion
 
         if freeze_signal_encoder:
-            self.signal_encoder.lock()
+            self.signal_encoder.lock(unlocked_groups=signal_unlocked_groups)
         if freeze_image_encoder:
             self.image_encoder.lock()
+            self.image_encoder.unlock_last_layers(image_unfreeze_last_n)
 
         self.signal_proj = nn.Sequential(
             nn.LayerNorm(512),
