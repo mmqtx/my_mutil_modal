@@ -82,6 +82,10 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
         token_fusion=bool(model_cfg.get("token_fusion", False)),
         token_fusion_layers=int(model_cfg.get("token_fusion_layers", 2)),
         token_fusion_heads=int(model_cfg.get("token_fusion_heads", 8)),
+        label_query_fusion=bool(model_cfg.get("label_query_fusion", False)),
+        label_query_layers=int(model_cfg.get("label_query_layers", 1)),
+        label_query_heads=int(model_cfg.get("label_query_heads", 8)),
+        label_query_weight=float(model_cfg.get("label_query_weight", 0.5)),
     )
     if not no_pretrained and model_cfg.get("signal_checkpoint"):
         load_gem_signal_weights(model, model_cfg["signal_checkpoint"])

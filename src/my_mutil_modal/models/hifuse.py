@@ -110,6 +110,55 @@ class TokenCrossFusion(nn.Module):
         return self.norm(self.encoder(x)[:, 0])
 
 
+class LabelQueryDecoder(nn.Module):
+    """Use one learnable query per diagnosis to read cross-modal token evidence."""
+
+    def __init__(self, num_classes: int, dim: int, heads: int = 8, layers: int = 1, dropout: float = 0.1) -> None:
+        super().__init__()
+        self.label_queries = nn.Parameter(torch.zeros(1, num_classes, dim))
+        self.global_type = nn.Parameter(torch.zeros(1, 1, dim))
+        self.signal_type = nn.Parameter(torch.zeros(1, 1, dim))
+        self.image_type = nn.Parameter(torch.zeros(1, 1, dim))
+        layer = nn.TransformerDecoderLayer(
+            d_model=dim,
+            nhead=heads,
+            dim_feedforward=dim * 4,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+            norm_first=True,
+        )
+        self.decoder = nn.TransformerDecoder(layer, num_layers=layers)
+        self.norm = nn.LayerNorm(dim)
+        self.head = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim, 1),
+        )
+        nn.init.trunc_normal_(self.label_queries, std=0.02)
+
+    def forward(
+        self,
+        global_fused: torch.Tensor,
+        signal_tokens: torch.Tensor,
+        image_tokens: torch.Tensor,
+    ) -> torch.Tensor:
+        bsz = global_fused.size(0)
+        context = torch.cat(
+            [
+                global_fused.unsqueeze(1) + self.global_type,
+                signal_tokens + self.signal_type,
+                image_tokens + self.image_type,
+            ],
+            dim=1,
+        )
+        queries = self.label_queries.expand(bsz, -1, -1) + global_fused.unsqueeze(1)
+        decoded = self.decoder(queries, context)
+        return self.head(self.norm(decoded)).squeeze(-1)
+
+
 class HiFuseECG(nn.Module):
     def __init__(
         self,
@@ -124,6 +173,10 @@ class HiFuseECG(nn.Module):
         token_fusion: bool = False,
         token_fusion_layers: int = 2,
         token_fusion_heads: int = 8,
+        label_query_fusion: bool = False,
+        label_query_layers: int = 1,
+        label_query_heads: int = 8,
+        label_query_weight: float = 0.5,
     ) -> None:
         super().__init__()
         self.signal_encoder = EcgTransformer(
@@ -138,6 +191,7 @@ class HiFuseECG(nn.Module):
         )
         self.image_encoder = CLIPVisionEncoder(clip_model_path)
         self.token_fusion_enabled = token_fusion
+        self.label_query_enabled = label_query_fusion
 
         if freeze_signal_encoder:
             self.signal_encoder.lock(unlocked_groups=signal_unlocked_groups)
@@ -166,6 +220,18 @@ class HiFuseECG(nn.Module):
             layers=token_fusion_layers,
             dropout=dropout,
         )
+        self.label_query_decoder = (
+            LabelQueryDecoder(
+                num_classes,
+                fusion_dim,
+                heads=label_query_heads,
+                layers=label_query_layers,
+                dropout=dropout,
+            )
+            if label_query_fusion
+            else None
+        )
+        self.label_query_weight = float(label_query_weight)
         self.classifier = nn.Sequential(
             nn.LayerNorm(fusion_dim),
             nn.Linear(fusion_dim, fusion_dim),
@@ -210,6 +276,12 @@ class HiFuseECG(nn.Module):
             img_tokens = self.image_token_proj(img_tokens_raw[:, 1:])
             fused = fused + self.token_fusion(sig_tokens, img_tokens)
         logits = self.classifier(fused)
+        if self.label_query_enabled:
+            if not self.token_fusion_enabled:
+                raise RuntimeError("label_query_fusion requires token_fusion=true")
+            assert self.label_query_decoder is not None
+            label_logits = self.label_query_decoder(fused, sig_tokens, img_tokens)
+            logits = logits + self.label_query_weight * label_logits
         sig_z = F.normalize(self.signal_contrast(sig_raw), dim=-1)
         img_z = F.normalize(self.image_contrast(img_raw), dim=-1)
         return {
