@@ -23,6 +23,14 @@ This project uses a stronger pretrained dual encoder:
 - Training objective: asymmetric multi-label loss for label imbalance, plus optional signal-image contrastive alignment.
 - Validation: per-class threshold calibration on the validation split, then fixed-threshold reporting on test.
 
+The current strongest variant is `ptbxl_hifuse_adapter_only`: it starts from the frozen HiFuse checkpoint and trains only low-impact residual adapters:
+
+- label-query decoder: one diagnosis query attends to ECG/image tokens for each label.
+- local morphology branch: a lightweight multi-dilation Conv1d branch reads raw waveform morphology.
+- adapter-only training: the pretrained encoders, old fusion path, and old classifier stay frozen/eval; only adapters and their scalar gates update.
+
+This avoids catastrophic drift from the strong pretrained base while letting the model add label-specific and local waveform evidence.
+
 ## Paths
 
 Pretrained weights are symlinked under `pretrained/` and ignored by git.
@@ -54,6 +62,20 @@ DDP launch:
 scripts/launch_ddp.sh configs/ptbxl_hifuse.yaml 0,1
 tail -f /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse/train_ddp.log
 ```
+
+Best current PTB-XL experiment:
+
+```bash
+scripts/launch_ddp.sh configs/ptbxl_hifuse_adapter_only.yaml 0,1
+tail -f /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only/train_ddp.log
+```
+
+Current result snapshot:
+
+| experiment | best val AUC | best val F1 | test AUC | test F1 |
+| --- | ---: | ---: | ---: | ---: |
+| `ptbxl_hifuse_ddp_finetune` | 0.9112 | 0.7286 | 0.9069 | 0.7086 |
+| `ptbxl_hifuse_adapter_only` | 0.9143 | 0.7324 | 0.9105 | 0.7154 |
 
 The STFAC baseline uses the paper's PTB-XL protocol: 100Hz records, 2.5s windows with 50% overlap, official folds 1-8/9/10, multi-label one-hot targets, validation threshold tuning, and ECG-level test metrics after averaging window logits.
 
