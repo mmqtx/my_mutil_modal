@@ -160,7 +160,7 @@ class HiFuseECG(nn.Module):
         )
         self.signal_contrast = nn.Linear(512, fusion_dim)
         self.image_contrast = nn.Linear(self.image_encoder.hidden_size, fusion_dim)
-        self.logit_scale = nn.Parameter(torch.tensor(2.6592))
+        self.logit_scale = nn.Parameter(torch.tensor(2.6592), requires_grad=False)
 
     def _encode_signal_tokens(self, signal: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         tokens = self.signal_encoder(signal, output_last_transformer_layer=True)

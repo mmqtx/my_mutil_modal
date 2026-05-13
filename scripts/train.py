@@ -208,7 +208,12 @@ def main() -> None:
     loaders = build_dataloaders(cfg, limit=args.limit_train, distributed=distributed, rank=rank, world_size=world_size)
     model = build_model(cfg, device, no_pretrained=args.no_pretrained)
     if distributed:
-        model = DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+        model = DistributedDataParallel(
+            model,
+            device_ids=[local_rank],
+            output_device=local_rank,
+            find_unused_parameters=bool(cfg["train"].get("ddp_find_unused_parameters", False)),
+        )
     optimizer = optimizer_for(model, cfg)
     scaler = torch.cuda.amp.GradScaler(enabled=bool(cfg["train"].get("amp", True)) and device.type == "cuda")
     pos_weight = class_pos_weight(cfg).to(device)
