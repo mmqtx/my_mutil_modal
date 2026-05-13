@@ -18,17 +18,24 @@ model:
   dropout: 0.15
   freeze_signal_encoder: true
   freeze_image_encoder: true
+  token_fusion: true
+  token_fusion_layers: 2
+  token_fusion_heads: 8
   modality_dropout: 0.10
   contrastive_weight: 0.05
 
 train:
-  epochs: 20
-  batch_size: 24
-  num_workers: 8
-  lr: 0.0003
+  epochs: 30
+  batch_size: 8
+  num_workers: 4
+  lr: 0.0001
   encoder_lr: 0.00001
   weight_decay: 0.05
   warmup_epochs: 2
   amp: true
+  loss: asymmetric
+  asl_gamma_pos: 0.0
+  asl_gamma_neg: 4.0
+  asl_clip: 0.05
   grad_clip_norm: 1.0
   early_stop_patience: 6

@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from my_mutil_modal.data import build_dataloaders
 from my_mutil_modal.models import HiFuseECG, STFACECGNet, load_gem_signal_weights
-from my_mutil_modal.training.losses import multilabel_bce_loss, symmetric_contrastive_loss
+from my_mutil_modal.training.losses import asymmetric_multilabel_loss, multilabel_bce_loss, symmetric_contrastive_loss
 from my_mutil_modal.training.metrics import compute_metrics, tune_thresholds
 from my_mutil_modal.utils.config import ensure_dir, load_config
 from my_mutil_modal.utils.seed import seed_everything
@@ -59,6 +59,9 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
         dropout=float(model_cfg.get("dropout", 0.15)),
         freeze_signal_encoder=bool(model_cfg.get("freeze_signal_encoder", True)),
         freeze_image_encoder=bool(model_cfg.get("freeze_image_encoder", True)),
+        token_fusion=bool(model_cfg.get("token_fusion", False)),
+        token_fusion_layers=int(model_cfg.get("token_fusion_layers", 2)),
+        token_fusion_heads=int(model_cfg.get("token_fusion_heads", 8)),
     )
     if not no_pretrained and model_cfg.get("signal_checkpoint"):
         load_gem_signal_weights(model, model_cfg["signal_checkpoint"])
@@ -119,7 +122,16 @@ def run_epoch(
             optimizer.zero_grad(set_to_none=True)
         with torch.set_grad_enabled(train), torch.cuda.amp.autocast(enabled=amp):
             out = model(signal, image, modality_dropout=modality_dropout)
-            loss = multilabel_bce_loss(out["logits"], targets, pos_weight=pos_weight)
+            if cfg["train"].get("loss", "bce") == "asymmetric":
+                loss = asymmetric_multilabel_loss(
+                    out["logits"],
+                    targets,
+                    gamma_pos=float(cfg["train"].get("asl_gamma_pos", 0.0)),
+                    gamma_neg=float(cfg["train"].get("asl_gamma_neg", 4.0)),
+                    clip=float(cfg["train"].get("asl_clip", 0.05)),
+                )
+            else:
+                loss = multilabel_bce_loss(out["logits"], targets, pos_weight=pos_weight)
             if contrastive_weight > 0 and "signal_z" in out and "image_z" in out:
                 loss = loss + contrastive_weight * symmetric_contrastive_loss(
                     out["signal_z"], out["image_z"], model.logit_scale

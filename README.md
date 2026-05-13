@@ -19,8 +19,8 @@ This project uses a stronger pretrained dual encoder:
 
 - ECG signal encoder: GEM-compatible ECG Transformer, initialized from `cpt_wfep_epoch_20.pt`.
 - ECG image encoder: local CLIP ViT-L/14-336.
-- Fusion: gated residual fusion over signal and image embeddings.
-- Training objective: multi-label BCE with class imbalance weighting, plus optional signal-image contrastive alignment.
+- Fusion: gated residual fusion over global embeddings plus optional token-level ECG-image cross-attention.
+- Training objective: asymmetric multi-label loss for label imbalance, plus optional signal-image contrastive alignment.
 - Validation: per-class threshold calibration on the validation split, then fixed-threshold reporting on test.
 
 ## Paths
