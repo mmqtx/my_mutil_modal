@@ -83,6 +83,14 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
     )
     if not no_pretrained and model_cfg.get("signal_checkpoint"):
         load_gem_signal_weights(model, model_cfg["signal_checkpoint"])
+    if model_cfg.get("init_checkpoint"):
+        ckpt = torch.load(model_cfg["init_checkpoint"], map_location="cpu", weights_only=False)
+        state = ckpt.get("model", ckpt)
+        missing, unexpected = model.load_state_dict(state, strict=False)
+        print(
+            f"Loaded init checkpoint {model_cfg['init_checkpoint']} "
+            f"(missing={len(missing)}, unexpected={len(unexpected)})"
+        )
     return model.to(device)
 
 
