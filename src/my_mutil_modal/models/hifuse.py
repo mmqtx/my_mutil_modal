@@ -310,6 +310,39 @@ class HiFuseECG(nn.Module):
         self.signal_contrast = nn.Linear(512, fusion_dim)
         self.image_contrast = nn.Linear(self.image_encoder.hidden_size, fusion_dim)
         self.logit_scale = nn.Parameter(torch.tensor(2.6592), requires_grad=False)
+        self.adapter_only_training = False
+
+    def freeze_base_for_adapter_training(self) -> None:
+        self.adapter_only_training = True
+        trainable_prefixes = (
+            "label_query_decoder",
+            "label_query_weight",
+            "signal_local_encoder",
+            "signal_local_classifier",
+            "signal_local_weight",
+        )
+        for name, param in self.named_parameters():
+            param.requires_grad = name.startswith(trainable_prefixes)
+
+    def train(self, mode: bool = True):
+        super().train(mode)
+        if mode and self.adapter_only_training:
+            frozen_modules = [
+                self.signal_encoder,
+                self.image_encoder,
+                self.signal_proj,
+                self.image_proj,
+                self.fusion,
+                self.signal_token_proj,
+                self.image_token_proj,
+                self.token_fusion,
+                self.classifier,
+                self.signal_contrast,
+                self.image_contrast,
+            ]
+            for module in frozen_modules:
+                module.eval()
+        return self
 
     def _encode_signal_tokens(self, signal: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         tokens = self.signal_encoder(signal, output_last_transformer_layer=True)

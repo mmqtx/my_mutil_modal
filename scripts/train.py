@@ -100,6 +100,8 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
             f"Loaded init checkpoint {model_cfg['init_checkpoint']} "
             f"(missing={len(missing)}, unexpected={len(unexpected)})"
         )
+    if bool(model_cfg.get("adapter_only_training", False)):
+        model.freeze_base_for_adapter_training()
     return model.to(device)
 
 
