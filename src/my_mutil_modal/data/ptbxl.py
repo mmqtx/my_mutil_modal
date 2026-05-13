@@ -9,6 +9,7 @@ import torch
 import wfdb
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms
 
 
@@ -191,7 +192,13 @@ class PTBXLWindowDataset(Dataset):
         }
 
 
-def build_dataloaders(cfg: Dict[str, Any], limit: Optional[int] = None) -> Dict[str, DataLoader]:
+def build_dataloaders(
+    cfg: Dict[str, Any],
+    limit: Optional[int] = None,
+    distributed: bool = False,
+    rank: int = 0,
+    world_size: int = 1,
+) -> Dict[str, DataLoader]:
     data_cfg = cfg["data"]
     train_cfg = cfg["train"]
     loaders: Dict[str, DataLoader] = {}
@@ -224,10 +231,14 @@ def build_dataloaders(cfg: Dict[str, Any], limit: Optional[int] = None) -> Dict[
                 use_images=bool(data_cfg.get("use_images", True)),
                 limit=split_limit,
             )
+        sampler = None
+        if distributed and split == "train":
+            sampler = DistributedSampler(ds, num_replicas=world_size, rank=rank, shuffle=True, drop_last=False)
         loaders[split] = DataLoader(
             ds,
             batch_size=int(train_cfg["batch_size"]),
-            shuffle=shuffle,
+            shuffle=shuffle and sampler is None,
+            sampler=sampler,
             num_workers=int(train_cfg.get("num_workers", 4)),
             pin_memory=torch.cuda.is_available(),
             drop_last=split == "train" and len(ds) >= int(train_cfg["batch_size"]),

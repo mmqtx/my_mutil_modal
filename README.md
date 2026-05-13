@@ -48,6 +48,13 @@ scripts/launch_train.sh configs/ptbxl_stfac_baseline.yaml 1
 tail -f /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_stfac_baseline/train.log
 ```
 
+DDP launch:
+
+```bash
+scripts/launch_ddp.sh configs/ptbxl_hifuse.yaml 0,1
+tail -f /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse/train_ddp.log
+```
+
 The STFAC baseline uses the paper's PTB-XL protocol: 100Hz records, 2.5s windows with 50% overlap, official folds 1-8/9/10, multi-label one-hot targets, validation threshold tuning, and ECG-level test metrics after averaging window logits.
 
 Quick data/model smoke test:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Dict, Tuple
@@ -10,6 +11,8 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
 from tqdm import tqdm
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +32,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit-train", type=int, default=None)
     parser.add_argument("--no-pretrained", action="store_true")
     return parser.parse_args()
+
+
+def setup_distributed() -> Tuple[bool, int, int, int]:
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    distributed = world_size > 1
+    if distributed:
+        torch.cuda.set_device(local_rank)
+        dist.init_process_group(backend="nccl")
+    return distributed, rank, local_rank, world_size
+
+
+def is_main_process(distributed: bool, rank: int) -> bool:
+    return (not distributed) or rank == 0
 
 
 def class_pos_weight(cfg: Dict) -> torch.Tensor:
@@ -97,6 +115,10 @@ def aggregate_by_ecg_id(targets: np.ndarray, logits: np.ndarray, ecg_ids: list[s
     return np.asarray(agg_targets), np.asarray(agg_logits)
 
 
+def unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
+    return model.module if isinstance(model, DistributedDataParallel) else model
+
+
 def run_epoch(
     model: HiFuseECG,
     loader,
@@ -106,6 +128,7 @@ def run_epoch(
     optimizer: torch.optim.Optimizer | None,
     scaler: torch.cuda.amp.GradScaler | None,
     cfg: Dict,
+    show_progress: bool = True,
 ) -> Tuple[float, np.ndarray, np.ndarray]:
     model.train(train)
     logits_all, targets_all, ecg_ids_all = [], [], []
@@ -113,7 +136,7 @@ def run_epoch(
     amp = bool(cfg["train"].get("amp", True)) and device.type == "cuda"
     contrastive_weight = float(cfg["model"].get("contrastive_weight", 0.0))
     modality_dropout = float(cfg["model"].get("modality_dropout", 0.0)) if train else 0.0
-    iterator = tqdm(loader, leave=False, desc="train" if train else "eval")
+    iterator = tqdm(loader, leave=False, desc="train" if train else "eval", disable=not show_progress)
     for batch in iterator:
         signal = batch["signal"].to(device, non_blocking=True)
         image = batch["image"].to(device, non_blocking=True)
@@ -133,8 +156,9 @@ def run_epoch(
             else:
                 loss = multilabel_bce_loss(out["logits"], targets, pos_weight=pos_weight)
             if contrastive_weight > 0 and "signal_z" in out and "image_z" in out:
+                base_model = unwrap_model(model)
                 loss = loss + contrastive_weight * symmetric_contrastive_loss(
-                    out["signal_z"], out["image_z"], model.logit_scale
+                    out["signal_z"], out["image_z"], base_model.logit_scale
                 )
         if train:
             assert optimizer is not None
@@ -151,10 +175,14 @@ def run_epoch(
                     torch.nn.utils.clip_grad_norm_(model.parameters(), float(cfg["train"]["grad_clip_norm"]))
                 optimizer.step()
         losses.append(float(loss.detach().cpu()))
-        logits_all.append(out["logits"].detach().float().cpu().numpy())
-        targets_all.append(targets.detach().float().cpu().numpy())
-        ecg_ids_all.extend([str(x) for x in batch["ecg_id"]])
-        iterator.set_postfix(loss=np.mean(losses))
+        if (not train) or show_progress:
+            logits_all.append(out["logits"].detach().float().cpu().numpy())
+            targets_all.append(targets.detach().float().cpu().numpy())
+            ecg_ids_all.extend([str(x) for x in batch["ecg_id"]])
+        if show_progress:
+            iterator.set_postfix(loss=np.mean(losses))
+    if not logits_all:
+        return float(np.mean(losses)), np.empty((0, 0)), np.empty((0, 0))
     targets_np = np.concatenate(targets_all)
     logits_np = np.concatenate(logits_all)
     if (not train) and bool(cfg.get("eval", {}).get("aggregate_windows", False)):
@@ -164,13 +192,16 @@ def run_epoch(
 
 def main() -> None:
     args = parse_args()
+    distributed, rank, local_rank, world_size = setup_distributed()
     cfg = load_config(args.config)
-    seed_everything(int(cfg.get("seed", 2026)))
-    out_dir = ensure_dir(cfg["output_dir"])
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    seed_everything(int(cfg.get("seed", 2026)) + rank)
+    out_dir = ensure_dir(cfg["output_dir"]) if is_main_process(distributed, rank) else Path(cfg["output_dir"])
+    device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
 
-    loaders = build_dataloaders(cfg, limit=args.limit_train)
+    loaders = build_dataloaders(cfg, limit=args.limit_train, distributed=distributed, rank=rank, world_size=world_size)
     model = build_model(cfg, device, no_pretrained=args.no_pretrained)
+    if distributed:
+        model = DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
     optimizer = optimizer_for(model, cfg)
     scaler = torch.cuda.amp.GradScaler(enabled=bool(cfg["train"].get("amp", True)) and device.type == "cuda")
     pos_weight = class_pos_weight(cfg).to(device)
@@ -179,33 +210,54 @@ def main() -> None:
     stale = 0
     history = []
     for epoch in range(1, int(cfg["train"]["epochs"]) + 1):
-        train_loss, _, _ = run_epoch(model, loaders["train"], device, pos_weight, True, optimizer, scaler, cfg)
-        val_loss, val_targets, val_logits = run_epoch(model, loaders["val"], device, pos_weight, False, None, None, cfg)
-        thresholds = tune_thresholds(val_targets, 1.0 / (1.0 + np.exp(-val_logits)))
-        val_metrics, _ = compute_metrics(val_targets, val_logits, thresholds)
-        row = {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **{f"val_{k}": v for k, v in val_metrics.items()}}
-        history.append(row)
-        print(json.dumps(row, indent=2))
-        if val_metrics["auc_macro"] > best_auc:
-            best_auc = val_metrics["auc_macro"]
-            stale = 0
-            torch.save(
-                {"model": model.state_dict(), "cfg": cfg, "thresholds": thresholds, "epoch": epoch, "val_metrics": val_metrics},
-                out_dir / "best.pt",
+        if distributed and hasattr(loaders["train"].sampler, "set_epoch"):
+            loaders["train"].sampler.set_epoch(epoch)
+        train_loss, _, _ = run_epoch(
+            model, loaders["train"], device, pos_weight, True, optimizer, scaler, cfg,
+            show_progress=is_main_process(distributed, rank),
+        )
+        stop_now = torch.tensor(0, device=device)
+        if is_main_process(distributed, rank):
+            eval_model = model.module if distributed else model
+            val_loss, val_targets, val_logits = run_epoch(
+                eval_model, loaders["val"], device, pos_weight, False, None, None, cfg, show_progress=True,
             )
-        else:
-            stale += 1
-            if stale >= int(cfg["train"].get("early_stop_patience", 6)):
-                break
+            thresholds = tune_thresholds(val_targets, 1.0 / (1.0 + np.exp(-val_logits)))
+            val_metrics, _ = compute_metrics(val_targets, val_logits, thresholds)
+            row = {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **{f"val_{k}": v for k, v in val_metrics.items()}}
+            history.append(row)
+            print(json.dumps(row, indent=2))
+            if val_metrics["auc_macro"] > best_auc:
+                best_auc = val_metrics["auc_macro"]
+                stale = 0
+                torch.save(
+                    {"model": eval_model.state_dict(), "cfg": cfg, "thresholds": thresholds, "epoch": epoch, "val_metrics": val_metrics},
+                    out_dir / "best.pt",
+                )
+            else:
+                stale += 1
+                if stale >= int(cfg["train"].get("early_stop_patience", 6)):
+                    stop_now.fill_(1)
+        if distributed:
+            dist.broadcast(stop_now, src=0)
+        if int(stop_now.item()) == 1:
+            break
 
+    if not is_main_process(distributed, rank):
+        if distributed:
+            dist.destroy_process_group()
+        return
     best = torch.load(out_dir / "best.pt", map_location=device, weights_only=False)
-    model.load_state_dict(best["model"])
-    test_loss, test_targets, test_logits = run_epoch(model, loaders["test"], device, pos_weight, False, None, None, cfg)
+    eval_model = model.module if distributed else model
+    eval_model.load_state_dict(best["model"])
+    test_loss, test_targets, test_logits = run_epoch(eval_model, loaders["test"], device, pos_weight, False, None, None, cfg)
     test_metrics, _ = compute_metrics(test_targets, test_logits, best["thresholds"])
     result = {"best_epoch": best["epoch"], "test_loss": test_loss, **{f"test_{k}": v for k, v in test_metrics.items()}}
     print(json.dumps(result, indent=2))
     (out_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
     (out_dir / "test_metrics.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    if distributed:
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":
