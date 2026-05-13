@@ -164,9 +164,8 @@ def run_epoch(
             else:
                 loss = multilabel_bce_loss(out["logits"], targets, pos_weight=pos_weight)
             if contrastive_weight > 0 and "signal_z" in out and "image_z" in out:
-                base_model = unwrap_model(model)
                 loss = loss + contrastive_weight * symmetric_contrastive_loss(
-                    out["signal_z"], out["image_z"], base_model.logit_scale
+                    out["signal_z"], out["image_z"], out["logit_scale"]
                 )
         if train:
             assert optimizer is not None

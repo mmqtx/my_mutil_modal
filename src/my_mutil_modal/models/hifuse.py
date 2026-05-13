@@ -197,7 +197,13 @@ class HiFuseECG(nn.Module):
         logits = self.classifier(fused)
         sig_z = F.normalize(self.signal_contrast(sig_raw), dim=-1)
         img_z = F.normalize(self.image_contrast(img_raw), dim=-1)
-        return {"logits": logits, "signal_z": sig_z, "image_z": img_z, "fusion_gate": gate}
+        return {
+            "logits": logits,
+            "signal_z": sig_z,
+            "image_z": img_z,
+            "fusion_gate": gate,
+            "logit_scale": self.logit_scale,
+        }
 
 
 def strip_module_prefix(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
