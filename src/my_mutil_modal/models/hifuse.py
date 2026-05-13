@@ -284,14 +284,22 @@ class HiFuseECG(nn.Module):
             if label_query_fusion
             else None
         )
-        self.label_query_weight = float(label_query_weight)
+        self.label_query_weight = (
+            nn.Parameter(torch.tensor(float(label_query_weight), dtype=torch.float32))
+            if label_query_fusion
+            else None
+        )
         self.signal_local_encoder = (
             SignalLocalEncoder(fusion_dim, channels=signal_local_channels, dropout=dropout)
             if signal_local_branch
             else None
         )
         self.signal_local_classifier = nn.Linear(fusion_dim, num_classes) if signal_local_branch else None
-        self.signal_local_weight = float(signal_local_weight)
+        self.signal_local_weight = (
+            nn.Parameter(torch.tensor(float(signal_local_weight), dtype=torch.float32))
+            if signal_local_branch
+            else None
+        )
         self.classifier = nn.Sequential(
             nn.LayerNorm(fusion_dim),
             nn.Linear(fusion_dim, fusion_dim),
@@ -334,6 +342,7 @@ class HiFuseECG(nn.Module):
         local_feat = None
         if self.signal_local_enabled:
             assert self.signal_local_encoder is not None
+            assert self.signal_local_weight is not None
             local_feat = self.signal_local_encoder(signal)
             fused = fused + self.signal_local_weight * local_feat
         if self.token_fusion_enabled:
@@ -345,10 +354,12 @@ class HiFuseECG(nn.Module):
             if not self.token_fusion_enabled:
                 raise RuntimeError("label_query_fusion requires token_fusion=true")
             assert self.label_query_decoder is not None
+            assert self.label_query_weight is not None
             label_logits = self.label_query_decoder(fused, sig_tokens, img_tokens)
             logits = logits + self.label_query_weight * label_logits
         if local_feat is not None:
             assert self.signal_local_classifier is not None
+            assert self.signal_local_weight is not None
             logits = logits + self.signal_local_weight * self.signal_local_classifier(local_feat)
         sig_z = F.normalize(self.signal_contrast(sig_raw), dim=-1)
         img_z = F.normalize(self.image_contrast(img_raw), dim=-1)
