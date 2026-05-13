@@ -23,16 +23,21 @@ cd "$ROOT_DIR"
 LOG="$OUTPUT_DIR/train.log"
 PIDFILE="$OUTPUT_DIR/train.pid"
 STATUS="$OUTPUT_DIR/train.status"
+SESSION_NAME="$(basename "$OUTPUT_DIR")"
 
-nohup bash -lc "
+screen -S "$SESSION_NAME" -X quit >/dev/null 2>&1 || true
+screen -dmS "$SESSION_NAME" bash -lc "
   set -euo pipefail
+  echo running > '$STATUS'
   source ~/anaconda3/etc/profile.d/conda.sh
   conda activate pytorch
   export CUDA_VISIBLE_DEVICES=$GPU_ID
-  python -u scripts/train.py --config '$CONFIG'
-" > "$LOG" 2>&1 &
+  python -u scripts/train.py --config '$CONFIG' > '$LOG' 2>&1
+  code=\$?
+  echo exit:\$code > '$STATUS'
+  exit \$code
+"
 
-PID=$!
+PID="$(screen -ls | awk -v s="$SESSION_NAME" '$0 ~ s {split($1,a,"."); print a[1]; exit}')"
 echo "$PID" > "$PIDFILE"
-echo "running" > "$STATUS"
 echo "$PID"
