@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my-mutil-modal"
+version = "0.1.0"
+description = "Multimodal ECG diagnosis experiments on PTB-XL and CPSC2018."
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+  "pandas",
+  "Pillow",
+  "PyYAML",
+  "scikit-learn",
+  "torch",
+  "torchvision",
+  "tqdm",
+  "transformers",
+  "wfdb",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
