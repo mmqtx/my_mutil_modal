@@ -41,6 +41,13 @@ conda activate pytorch
 python scripts/train.py --config configs/ptbxl_stfac_baseline.yaml
 ```
 
+Background launch with logs on the dataset disk:
+
+```bash
+scripts/launch_train.sh configs/ptbxl_stfac_baseline.yaml 1
+tail -f /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_stfac_baseline/train.log
+```
+
 The STFAC baseline uses the paper's PTB-XL protocol: 100Hz records, 2.5s windows with 50% overlap, official folds 1-8/9/10, multi-label one-hot targets, validation threshold tuning, and ECG-level test metrics after averaging window logits.
 
 Quick data/model smoke test:
