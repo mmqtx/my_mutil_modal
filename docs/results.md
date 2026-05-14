@@ -32,7 +32,7 @@ Use `accuracy_label` for paper-table comparison. `accuracy_sample` is stricter e
 | 2D-ECGNet | paper-reported | reference | 0.929 | 0.770 | 0.929 | 0.770 | 0.892 | STFAC Table 2 |
 | CAMV-RNN | paper-method local reproduction | complete | 0.8053 | 0.4435 | 0.7948 | 0.4061 | 0.8409 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
 | CBMV-CNN | paper-method local reproduction | complete | 0.8156 | 0.4691 | 0.8032 | 0.4557 | 0.7843 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
-| STFAC-ECGNet | paper-method local reproduction | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
+| STFAC-ECGNet | paper-method local reproduction | complete | 0.8114 | 0.4450 | 0.8022 | 0.4088 | 0.8459 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
 | HiFuse DDP finetune | local method | complete | 0.9112 | 0.7286 | 0.9069 | 0.7086 | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_ddp_finetune` |
 | HiFuse adapter-only | local method | complete | 0.9143 | 0.7324 | 0.9105 | 0.7154 | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only` |
 
