@@ -38,6 +38,6 @@ Use `accuracy_label` for paper-table comparison. `accuracy_sample` is stricter e
 
 ## Notes
 
-- The previous approximate baseline metrics were invalidated after architecture and training-protocol tightening, so the paper-method rows are pending rerun.
+- The previous approximate baseline metrics were invalidated after architecture and training-protocol tightening; the completed paper-method rows above are the current fair-comparison baselines.
 - The intended mismatch is only image data: the paper used its own generated ECG images, while this project uses our organized 12-lead ECG images.
 - Earlier approximate baseline runs were moved under `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/approx_v0/` and are not used for fair comparison.
