@@ -2,6 +2,8 @@
 
 This project treats the STFAC-ECGNet paper as the baseline reference, but separates paper-reported comparison numbers from models that must be rerun on our organized data.
 
+This is not a bit-level reproduction of the paper implementation. The paper does not release full training code, its exact ECG image renderer, or every implementation detail. Our local runs are method-level reproductions on the organized PTB-XL/GenECG Dataset A data contract.
+
 ## What Must Be Reproduced Locally
 
 Rows marked `(ours)` in the paper are considered local reproduction targets because the paper describes shared preprocessing, optimizer settings, and dataset splits for them.

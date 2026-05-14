@@ -58,6 +58,7 @@ scripts/launch_train.sh configs/baselines/ptbxl_stfac_ecgnet.yaml 0
 ```
 
 The paper table registry and reproduction policy are documented in `baselines/stfac_paper_results.yaml` and `docs/baseline_reproduction.md`.
+The running experiment table is maintained in `docs/results.md`.
 
 Background launch with logs on the dataset disk:
 
