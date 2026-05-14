@@ -34,6 +34,7 @@ class PTBXLMultimodalDataset(Dataset):
         image_column: str = "image_path",
         signal_length: int = 5000,
         image_size: int = 336,
+        use_signals: bool = True,
         use_images: bool = True,
         limit: Optional[int] = None,
     ) -> None:
@@ -42,6 +43,7 @@ class PTBXLMultimodalDataset(Dataset):
         self.signal_column = signal_column
         self.image_column = image_column
         self.signal_length = signal_length
+        self.use_signals = use_signals
         self.use_images = use_images
 
         df = pd.read_csv(manifest)
@@ -93,7 +95,10 @@ class PTBXLMultimodalDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         row = self.df.iloc[idx]
-        signal = self._load_signal(str(row[self.signal_column]))
+        if self.use_signals:
+            signal = self._load_signal(str(row[self.signal_column]))
+        else:
+            signal = torch.zeros(12, self.signal_length, dtype=torch.float32)
         if self.use_images:
             image = self._load_image(str(row[self.image_column]))
         else:
@@ -120,6 +125,7 @@ class PTBXLWindowDataset(Dataset):
         image_column: str = "image_path",
         image_size: int = 224,
         image_channels: int = 3,
+        use_signals: bool = True,
         use_images: bool = True,
         limit: Optional[int] = None,
     ) -> None:
@@ -127,6 +133,7 @@ class PTBXLWindowDataset(Dataset):
         self.label_columns = list(label_columns)
         self.signal_column = signal_column
         self.image_column = image_column
+        self.use_signals = use_signals
         self.use_images = use_images
 
         df = pd.read_csv(manifest)
@@ -178,7 +185,10 @@ class PTBXLWindowDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         row = self.df.iloc[idx]
-        signal = self._load_signal_window(row)
+        if self.use_signals:
+            signal = self._load_signal_window(row)
+        else:
+            signal = torch.zeros(12, int(row["end_sample"]) - int(row["start_sample"]), dtype=torch.float32)
         if self.use_images:
             image = self._load_image(str(row[self.image_column]))
         else:
@@ -215,6 +225,7 @@ def build_dataloaders(
                 image_column=data_cfg.get("image_column", "image_path"),
                 image_size=int(data_cfg.get("image_size", 224)),
                 image_channels=int(data_cfg.get("image_channels", 3)),
+                use_signals=bool(data_cfg.get("use_signals", True)),
                 use_images=bool(data_cfg.get("use_images", True)),
                 limit=split_limit,
             )
@@ -228,6 +239,7 @@ def build_dataloaders(
                 image_column=data_cfg.get("image_column", "image_path"),
                 signal_length=int(data_cfg.get("signal_length", 5000)),
                 image_size=int(data_cfg.get("image_size", 336)),
+                use_signals=bool(data_cfg.get("use_signals", True)),
                 use_images=bool(data_cfg.get("use_images", True)),
                 limit=split_limit,
             )

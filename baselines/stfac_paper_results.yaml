@@ -1,0 +1,67 @@
+paper:
+  title: "A coordinated adaptive multiscale enhanced spatio-temporal fusion network for multi-lead electrocardiogram arrhythmia detection"
+  short_name: "STFAC-ECGNet"
+  local_markdown: "/data/ljq24358/mutil_modal_datasets/paper/STFAC-ECGNet.md"
+  local_pdf: "/data/ljq24358/mutil_modal_datasets/paper/STFAC-ECGNet.pdf"
+  doi: "10.1038/s41598-024-71700-z"
+
+interpretation:
+  local_reproduction_required:
+    reason: "The paper marks these rows as '(ours)' and describes the common preprocessing, optimizer, and split protocol used by the authors."
+    ptbxl:
+      - "CBMV-CNN"
+      - "CAMV-RNN"
+      - "STFAC-ECGNet"
+    cpsc2018:
+      - "CBMV-CNN"
+      - "CAMV-RNN"
+      - "STFAC-ECGNet"
+      - "STFAC-ECGNet(only contains CBAM, without CASSAN and SSAN)"
+  paper_reported_only:
+    reason: "The comparison rows are named with literature citations and the paper gives no implementation, training, or same-image-generation protocol for reproducing them. Treat them as values reported by the STFAC-ECGNet paper unless we later choose a specific cited model to reimplement."
+
+ptbxl_table2:
+  split: "official folds 1-8 train, 9 validation, 10 test"
+  labels: [NORM, CD, MI, HYP, STTC]
+  metrics: [accuracy, auc, recall, precision, f1]
+  rows:
+    - {name: "Xresnet1d101", source_type: "paper_reported", accuracy: 0.885, auc: 0.929, recall: 0.705, precision: 0.780, f1: 0.741}
+    - {name: "FCN-Wang", source_type: "paper_reported", accuracy: 0.880, auc: 0.926, recall: 0.786, precision: 0.729, f1: 0.756}
+    - {name: "LSTM", source_type: "paper_reported", accuracy: 0.876, auc: 0.927, recall: 0.800, precision: 0.706, f1: 0.750}
+    - {name: "ResNet-Wang", source_type: "paper_reported", accuracy: 0.877, auc: 0.749, recall: 0.795, precision: 0.712, f1: 0.751}
+    - {name: "Inception1d", source_type: "paper_reported", accuracy: 0.876, auc: 0.926, recall: 0.788, precision: 0.711, f1: 0.748}
+    - {name: "ECG-DNN", source_type: "paper_reported", accuracy: 0.884, auc: 0.924, recall: 0.684, precision: 0.793, f1: 0.734}
+    - {name: "DNN-zhu", source_type: "paper_reported", accuracy: 0.890, auc: 0.918, recall: 0.774, precision: 0.758, f1: 0.766}
+    - {name: "Resnet34_1d", source_type: "paper_reported", accuracy: 0.882, auc: 0.908, recall: 0.691, precision: 0.778, f1: 0.732}
+    - {name: "Resnet34_2d", source_type: "paper_reported", accuracy: 0.879, auc: 0.911, recall: 0.706, precision: 0.722, f1: 0.714}
+    - {name: "Image_CNN", source_type: "paper_reported", accuracy: 0.888, auc: 0.921, recall: 0.764, precision: 0.721, f1: 0.742}
+    - {name: "SincNet", source_type: "paper_reported", accuracy: 0.765, auc: 0.910, recall: 0.662, precision: 0.714, f1: 0.687}
+    - {name: "SE-ResNet1", source_type: "paper_reported", accuracy: 0.862, auc: 0.889, recall: 0.599, precision: 0.753, f1: 0.667}
+    - {name: "SE-ResNet12", source_type: "paper_reported", accuracy: 0.880, auc: 0.923, recall: 0.694, precision: 0.772, f1: 0.731}
+    - {name: "LightX3ECG", source_type: "paper_reported", accuracy: 0.884, auc: 0.920, recall: 0.681, precision: 0.795, f1: 0.734}
+    - {name: "1D-ECGNet", source_type: "paper_reported", accuracy: 0.884, auc: 0.919, recall: 0.696, precision: 0.780, f1: 0.736}
+    - {name: "2D-ECGNet", source_type: "paper_reported", accuracy: 0.892, auc: 0.929, recall: 0.790, precision: 0.752, f1: 0.770}
+    - {name: "CBMV-CNN", source_type: "local_reproduction_required", accuracy: 0.880, auc: 0.935, recall: 0.796, precision: 0.725, f1: 0.759}
+    - {name: "CAMV-RNN", source_type: "local_reproduction_required", accuracy: 0.889, auc: 0.932, recall: 0.783, precision: 0.748, f1: 0.765}
+    - {name: "STFAC-ECGNet", source_type: "local_reproduction_required", accuracy: 0.894, auc: 0.933, recall: 0.756, precision: 0.778, f1: 0.767}
+
+cpsc2018_table4:
+  split: "10-fold cross-validation in the paper; our ECGIMG image coverage is 4502/6877 records"
+  metrics: "per-class F1 and average F1"
+  rows:
+    - {name: "TI-CNN", source_type: "paper_reported", year: 2018, normal: 0.759, af: 0.807, i_avb: 0.855, lbbb: 0.844, rbbb: 0.837, pac: 0.606, pvc: 0.712, std: 0.742, ste: 0.556, avg: 0.773}
+    - {name: "CNN + BiLSTM", source_type: "paper_reported", year: 2019, normal: 0.755, af: 0.846, i_avb: 0.870, lbbb: 0.869, rbbb: 0.780, pac: 0.748, pvc: 0.829, std: 0.790, ste: 0.655, avg: 0.800}
+    - {name: "ATI-CNN", source_type: "paper_reported", year: 2020, normal: 0.789, af: 0.920, i_avb: 0.850, lbbb: 0.872, rbbb: 0.933, pac: 0.736, pvc: 0.861, std: 0.789, ste: 0.556, avg: 0.812}
+    - {name: "CNN + BiRNN + Attention", source_type: "paper_reported", year: 2020, normal: 0.795, af: 0.897, i_avb: 0.865, lbbb: 0.821, rbbb: 0.911, pac: 0.734, pvc: 0.852, std: 0.788, ste: 0.509, avg: 0.797}
+    - {name: "CNN + Transformer", source_type: "paper_reported", year: 2021, normal: 0.817, af: 0.858, i_avb: 0.878, lbbb: 0.800, rbbb: 0.872, pac: 0.618, pvc: 0.830, std: 0.711, ste: 0.686, avg: 0.786}
+    - {name: "Deform-CNN", source_type: "paper_reported", year: 2021, normal: 0.805, af: 0.931, i_avb: 0.893, lbbb: 0.900, rbbb: 0.948, pac: 0.663, pvc: 0.871, std: 0.800, ste: 0.667, avg: 0.831}
+    - {name: "DAMS-Net", source_type: "paper_reported", year: 2022, normal: 0.819, af: 0.915, i_avb: 0.881, lbbb: 0.878, rbbb: 0.936, pac: 0.755, pvc: 0.876, std: 0.819, ste: 0.684, avg: 0.839}
+    - {name: "ASTLNet", source_type: "paper_reported", year: 2022, normal: 0.790, af: 0.923, i_avb: 0.867, lbbb: 0.892, rbbb: 0.937, pac: 0.757, pvc: 0.837, std: 0.798, ste: 0.558, avg: 0.818}
+    - {name: "LightX3ECG", source_type: "paper_reported", year: 2023, normal: 0.755, af: 0.940, i_avb: 0.892, lbbb: 0.887, rbbb: 0.944, pac: 0.631, pvc: 0.792, std: 0.785, ste: 0.578, avg: 0.800}
+    - {name: "SE-ResNet + CoT Attention + BiGRU", source_type: "paper_reported", year: 2023, normal: 0.824, af: 0.925, i_avb: 0.882, lbbb: 0.937, rbbb: 0.939, pac: 0.734, pvc: 0.767, std: 0.835, ste: 0.600, avg: 0.827}
+    - {name: "CNN-DVIT", source_type: "paper_reported", year: 2023, normal: 0.831, af: 0.924, i_avb: 0.877, lbbb: 0.905, rbbb: 0.935, pac: 0.704, pvc: 0.842, std: 0.823, ste: 0.610, avg: 0.829}
+    - {name: "LFG-Net", source_type: "paper_reported", year: 2023, normal: 0.792, af: 0.932, i_avb: 0.891, lbbb: 0.894, rbbb: 0.937, pac: 0.756, pvc: 0.874, std: 0.821, ste: 0.682, avg: 0.842}
+    - {name: "CBMV-CNN", source_type: "local_reproduction_required", year: 2023, normal: 0.772, af: 0.928, i_avb: 0.908, lbbb: 0.899, rbbb: 0.937, pac: 0.677, pvc: 0.848, std: 0.836, ste: 0.716, avg: 0.837}
+    - {name: "STFAC-ECGNet", source_type: "local_reproduction_required", year: 2023, normal: 0.774, af: 0.928, i_avb: 0.910, lbbb: 0.902, rbbb: 0.940, pac: 0.707, pvc: 0.838, std: 0.840, ste: 0.762, avg: 0.846}
+    - {name: "CAMV-RNN", source_type: "local_reproduction_required", year: 2023, normal: 0.787, af: 0.931, i_avb: 0.911, lbbb: 0.914, rbbb: 0.940, pac: 0.694, pvc: 0.850, std: 0.846, ste: 0.751, avg: 0.848}
+    - {name: "STFAC-ECGNet only CBAM", source_type: "local_reproduction_required", year: 2023, normal: 0.797, af: 0.929, i_avb: 0.905, lbbb: 0.918, rbbb: 0.940, pac: 0.688, pvc: 0.868, std: 0.853, ste: 0.765, avg: 0.852}

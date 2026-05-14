@@ -49,6 +49,16 @@ conda activate pytorch
 python scripts/train.py --config configs/ptbxl_stfac_baseline.yaml
 ```
 
+Paper-aligned STFAC baseline reproduction configs are kept separately under `configs/baselines/`, with outputs on the dataset SSD:
+
+```bash
+scripts/launch_train.sh configs/baselines/ptbxl_camv_rnn.yaml 0
+scripts/launch_train.sh configs/baselines/ptbxl_cbmv_cnn.yaml 0
+scripts/launch_train.sh configs/baselines/ptbxl_stfac_ecgnet.yaml 0
+```
+
+The paper table registry and reproduction policy are documented in `baselines/stfac_paper_results.yaml` and `docs/baseline_reproduction.md`.
+
 Background launch with logs on the dataset disk:
 
 ```bash

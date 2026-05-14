@@ -139,6 +139,63 @@ class CBMVCNNBlock(nn.Module):
         return x, spatial
 
 
+class CAMVRNNClassifier(nn.Module):
+    """Signal-only CAMV-RNN baseline from the STFAC-ECGNet paper."""
+
+    def __init__(
+        self,
+        num_classes: int,
+        signal_hidden: int = 64,
+        fusion_dim: int = 512,
+        dropout: float = 0.2,
+    ) -> None:
+        super().__init__()
+        self.camv = CAMVRNNBlock(in_channels=12, hidden=signal_hidden, dropout=dropout)
+        temporal_dim = signal_hidden * 4
+        self.classifier = nn.Sequential(
+            nn.BatchNorm1d(temporal_dim),
+            nn.Dropout(dropout),
+            nn.ReLU(inplace=True),
+            nn.Linear(temporal_dim, fusion_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(fusion_dim, num_classes),
+        )
+
+    def forward(self, signal: torch.Tensor, image: torch.Tensor | None = None, **_: float) -> Dict[str, torch.Tensor]:
+        _, temporal = self.camv(signal)
+        return {"logits": self.classifier(temporal)}
+
+
+class CBMVCNNClassifier(nn.Module):
+    """Image-only CBMV-CNN baseline from the STFAC-ECGNet paper."""
+
+    def __init__(
+        self,
+        num_classes: int,
+        image_in_channels: int = 3,
+        image_channels: int = 128,
+        fusion_dim: int = 512,
+        dropout: float = 0.2,
+    ) -> None:
+        super().__init__()
+        self.cbmv = CBMVCNNBlock(in_channels=image_in_channels, channels=image_channels, dropout=dropout)
+        spatial_dim = image_channels * 2
+        self.classifier = nn.Sequential(
+            nn.BatchNorm1d(spatial_dim),
+            nn.Dropout(dropout),
+            nn.ReLU(inplace=True),
+            nn.Linear(spatial_dim, fusion_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(fusion_dim, num_classes),
+        )
+
+    def forward(self, signal: torch.Tensor | None, image: torch.Tensor, **_: float) -> Dict[str, torch.Tensor]:
+        _, spatial = self.cbmv(image)
+        return {"logits": self.classifier(spatial)}
+
+
 class STFACECGNet(nn.Module):
     """Reproduction-oriented STFAC-ECGNet baseline for PTB-XL superclass labels."""
 

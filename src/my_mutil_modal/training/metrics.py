@@ -44,6 +44,7 @@ def compute_metrics(targets: np.ndarray, logits: np.ndarray, thresholds: np.ndar
         "f1_macro": float(f1_score(targets, preds, average="macro", zero_division=0)),
         "precision_macro": float(precision_score(targets, preds, average="macro", zero_division=0)),
         "recall_macro": float(recall_score(targets, preds, average="macro", zero_division=0)),
+        "accuracy_label": float((preds == targets).mean()),
         "accuracy_sample": float((preds == targets).all(axis=1).mean()),
     }
     return metrics, probs

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from my_mutil_modal.data import build_dataloaders
-from my_mutil_modal.models import HiFuseECG, STFACECGNet, load_gem_signal_weights
+from my_mutil_modal.models import CAMVRNNClassifier, CBMVCNNClassifier, HiFuseECG, STFACECGNet, load_gem_signal_weights
 from my_mutil_modal.training.losses import asymmetric_multilabel_loss, multilabel_bce_loss, symmetric_contrastive_loss
 from my_mutil_modal.training.metrics import compute_metrics, tune_thresholds
 from my_mutil_modal.utils.config import ensure_dir, load_config
@@ -60,7 +60,25 @@ def class_pos_weight(cfg: Dict) -> torch.Tensor:
 
 def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) -> HiFuseECG:
     model_cfg = cfg["model"]
-    if model_cfg.get("name", "hifuse").lower() == "stfac":
+    model_name = model_cfg.get("name", "hifuse").lower()
+    if model_name == "camv_rnn":
+        model = CAMVRNNClassifier(
+            num_classes=len(cfg["data"]["label_columns"]),
+            signal_hidden=int(model_cfg.get("signal_hidden", 64)),
+            fusion_dim=int(model_cfg.get("fusion_dim", 512)),
+            dropout=float(model_cfg.get("dropout", 0.2)),
+        )
+        return model.to(device)
+    if model_name == "cbmv_cnn":
+        model = CBMVCNNClassifier(
+            num_classes=len(cfg["data"]["label_columns"]),
+            image_in_channels=int(model_cfg.get("image_in_channels", cfg["data"].get("image_channels", 3))),
+            image_channels=int(model_cfg.get("image_channels", 128)),
+            fusion_dim=int(model_cfg.get("fusion_dim", 512)),
+            dropout=float(model_cfg.get("dropout", 0.2)),
+        )
+        return model.to(device)
+    if model_name == "stfac":
         model = STFACECGNet(
             num_classes=len(cfg["data"]["label_columns"]),
             image_in_channels=int(model_cfg.get("image_in_channels", cfg["data"].get("image_channels", 3))),
@@ -123,6 +141,25 @@ def optimizer_for(model: HiFuseECG, cfg: Dict) -> torch.optim.Optimizer:
     return torch.optim.AdamW(groups)
 
 
+def scheduler_for(
+    optimizer: torch.optim.Optimizer,
+    cfg: Dict,
+    steps_per_epoch: int,
+) -> torch.optim.lr_scheduler.LRScheduler | None:
+    scheduler_name = str(cfg["train"].get("scheduler", "")).lower()
+    if scheduler_name != "onecycle":
+        return None
+    return torch.optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=[group["lr"] for group in optimizer.param_groups],
+        epochs=int(cfg["train"]["epochs"]),
+        steps_per_epoch=steps_per_epoch,
+        pct_start=float(cfg["train"].get("onecycle_pct_start", 0.3)),
+        div_factor=float(cfg["train"].get("onecycle_div_factor", 25.0)),
+        final_div_factor=float(cfg["train"].get("onecycle_final_div_factor", 1e4)),
+    )
+
+
 def aggregate_by_ecg_id(targets: np.ndarray, logits: np.ndarray, ecg_ids: list[str]) -> Tuple[np.ndarray, np.ndarray]:
     grouped: Dict[str, list[int]] = {}
     for i, ecg_id in enumerate(ecg_ids):
@@ -145,6 +182,7 @@ def run_epoch(
     pos_weight: torch.Tensor | None,
     train: bool,
     optimizer: torch.optim.Optimizer | None,
+    scheduler: torch.optim.lr_scheduler.LRScheduler | None,
     scaler: torch.cuda.amp.GradScaler | None,
     cfg: Dict,
     show_progress: bool = True,
@@ -192,6 +230,8 @@ def run_epoch(
                 if float(cfg["train"].get("grad_clip_norm", 0)) > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), float(cfg["train"]["grad_clip_norm"]))
                 optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
         losses.append(float(loss.detach().cpu()))
         if (not train) or show_progress:
             logits_all.append(out["logits"].detach().float().cpu().numpy())
@@ -226,35 +266,45 @@ def main() -> None:
             find_unused_parameters=bool(cfg["train"].get("ddp_find_unused_parameters", False)),
         )
     optimizer = optimizer_for(model, cfg)
+    scheduler = scheduler_for(optimizer, cfg, steps_per_epoch=len(loaders["train"]))
     scaler = torch.cuda.amp.GradScaler(enabled=bool(cfg["train"].get("amp", True)) and device.type == "cuda")
     pos_weight = class_pos_weight(cfg).to(device)
 
-    best_auc = -1.0
+    selection_metric = str(cfg["train"].get("selection_metric", "auc_macro"))
+    best_score = -1.0
     stale = 0
     history = []
     for epoch in range(1, int(cfg["train"]["epochs"]) + 1):
         if distributed and hasattr(loaders["train"].sampler, "set_epoch"):
             loaders["train"].sampler.set_epoch(epoch)
         train_loss, _, _ = run_epoch(
-            model, loaders["train"], device, pos_weight, True, optimizer, scaler, cfg,
+            model, loaders["train"], device, pos_weight, True, optimizer, scheduler, scaler, cfg,
             show_progress=is_main_process(distributed, rank),
         )
         stop_now = torch.tensor(0, device=device)
         if is_main_process(distributed, rank):
             eval_model = model.module if distributed else model
             val_loss, val_targets, val_logits = run_epoch(
-                eval_model, loaders["val"], device, pos_weight, False, None, None, cfg, show_progress=True,
+                eval_model, loaders["val"], device, pos_weight, False, None, None, None, cfg, show_progress=True,
             )
             thresholds = tune_thresholds(val_targets, 1.0 / (1.0 + np.exp(-val_logits)))
             val_metrics, _ = compute_metrics(val_targets, val_logits, thresholds)
             row = {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, **{f"val_{k}": v for k, v in val_metrics.items()}}
             history.append(row)
             print(json.dumps(row, indent=2))
-            if val_metrics["auc_macro"] > best_auc:
-                best_auc = val_metrics["auc_macro"]
+            current_score = float(val_metrics[selection_metric])
+            if current_score > best_score:
+                best_score = current_score
                 stale = 0
                 torch.save(
-                    {"model": eval_model.state_dict(), "cfg": cfg, "thresholds": thresholds, "epoch": epoch, "val_metrics": val_metrics},
+                    {
+                        "model": eval_model.state_dict(),
+                        "cfg": cfg,
+                        "thresholds": thresholds,
+                        "epoch": epoch,
+                        "selection_metric": selection_metric,
+                        "val_metrics": val_metrics,
+                    },
                     out_dir / "best.pt",
                 )
             else:
@@ -273,7 +323,7 @@ def main() -> None:
     best = torch.load(out_dir / "best.pt", map_location=device, weights_only=False)
     eval_model = model.module if distributed else model
     eval_model.load_state_dict(best["model"])
-    test_loss, test_targets, test_logits = run_epoch(eval_model, loaders["test"], device, pos_weight, False, None, None, cfg)
+    test_loss, test_targets, test_logits = run_epoch(eval_model, loaders["test"], device, pos_weight, False, None, None, None, cfg)
     test_metrics, _ = compute_metrics(test_targets, test_logits, best["thresholds"])
     result = {"best_epoch": best["epoch"], "test_loss": test_loss, **{f"test_{k}": v for k, v in test_metrics.items()}}
     print(json.dumps(result, indent=2))

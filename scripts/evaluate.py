@@ -30,7 +30,7 @@ def main() -> None:
     model.load_state_dict(ckpt["model"])
     loaders = build_dataloaders(cfg)
     pos_weight = class_pos_weight(cfg).to(device)
-    test_loss, targets, logits = run_epoch(model, loaders["test"], device, pos_weight, False, None, None, cfg)
+    test_loss, targets, logits = run_epoch(model, loaders["test"], device, pos_weight, False, None, None, None, cfg)
     metrics, _ = compute_metrics(targets, logits, ckpt["thresholds"])
     print(json.dumps({"test_loss": test_loss, **metrics}, indent=2))
 
