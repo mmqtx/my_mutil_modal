@@ -27,11 +27,14 @@ train:
   batch_size: 128
   num_workers: 8
   lr: 0.003
-  weight_decay: 0.0001
+  weight_decay: 0.01
+  optimizer: adam
   scheduler: onecycle
-  onecycle_pct_start: 0.3
+  onecycle_pct_start: 0.25
+  onecycle_final_div_factor: 100000.0
   amp: true
   loss: bce
+  use_pos_weight: false
   selection_metric: f1_macro
   grad_clip_norm: 1.0
   early_stop_patience: 10

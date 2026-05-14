@@ -2,7 +2,7 @@
 
 This project treats the STFAC-ECGNet paper as the baseline reference, but separates paper-reported comparison numbers from models that must be rerun on our organized data.
 
-This is not yet a bit-level reproduction of the paper implementation. The paper does not release full training code, its exact ECG image renderer, or every implementation detail. The local target is to reproduce the paper method on our organized 12-lead ECG image data, keeping every non-image-data detail as close to the paper as possible.
+This is not a bit-level reproduction of unpublished source code. The paper does not release full training code or its exact ECG image renderer. The local target is to reproduce the paper method on our organized 12-lead ECG image data, keeping every non-image-data detail as close to the paper as possible.
 
 ## What Must Be Reproduced Locally
 
@@ -38,6 +38,16 @@ Configs:
 These use the paper-aligned settings: PTB-XL 100 Hz windows, 2.5 s windows with 50% overlap, official folds 1-8/9/10, batch size 128, 10 epochs, learning rate 3e-3, OneCycleLR, and F1-based model selection.
 
 The image branch uses our 12-lead ECG images. We do not add grayscale-converted variants as the main baseline, because the requested reproduction differs from the paper only in the image data source.
+
+Paper-aligned settings currently enforced:
+
+- CAMV hidden state `h=256`.
+- CASSAN channel reconstruction parameter `c=8`.
+- CBMV/STFAC parameter counts matched to Table 5 within rounding tolerance. CAMV-RNN keeps the paper's `h=256`, `c=8`, and `hMLP=256`, but its parameter count remains below Table 5; this is tracked as a paper-code ambiguity rather than hidden by changing disclosed parameters.
+- MLP hidden state `hMLP=256`.
+- Learning rate `3e-3`, batch size `128`, epochs `10`, OneCycleLR cosine schedule.
+- PTB-XL 100 Hz signals, expert-recommended split, 2.5 s sliding window with 50% overlap.
+- Multi-label one-hot targets, F1 model selection, adaptive thresholds in `[0,1]`, no argmax.
 
 For paper-table comparison, use `*_accuracy_label`, not `*_accuracy_sample`. `accuracy_label` matches the paper's TP/TN/FP/FN-style binary accuracy over label decisions, while `accuracy_sample` is stricter exact-match accuracy over all labels in one ECG.
 

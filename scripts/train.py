@@ -49,7 +49,9 @@ def is_main_process(distributed: bool, rank: int) -> bool:
     return (not distributed) or rank == 0
 
 
-def class_pos_weight(cfg: Dict) -> torch.Tensor:
+def class_pos_weight(cfg: Dict) -> torch.Tensor | None:
+    if not bool(cfg["train"].get("use_pos_weight", True)):
+        return None
     df = pd.read_csv(cfg["data"]["manifest"])
     train = df[df["split"] == "train"]
     labels = train[cfg["data"]["label_columns"]].astype(np.float32).to_numpy()
@@ -138,6 +140,8 @@ def optimizer_for(model: HiFuseECG, cfg: Dict) -> torch.optim.Optimizer:
     groups = [{"params": head, "lr": base_lr, "weight_decay": weight_decay}]
     if encoder:
         groups.append({"params": encoder, "lr": encoder_lr, "weight_decay": weight_decay})
+    if str(cfg["train"].get("optimizer", "adamw")).lower() == "adam":
+        return torch.optim.Adam(groups)
     return torch.optim.AdamW(groups)
 
 
@@ -268,7 +272,9 @@ def main() -> None:
     optimizer = optimizer_for(model, cfg)
     scheduler = scheduler_for(optimizer, cfg, steps_per_epoch=len(loaders["train"]))
     scaler = torch.cuda.amp.GradScaler(enabled=bool(cfg["train"].get("amp", True)) and device.type == "cuda")
-    pos_weight = class_pos_weight(cfg).to(device)
+    pos_weight = class_pos_weight(cfg)
+    if pos_weight is not None:
+        pos_weight = pos_weight.to(device)
 
     selection_metric = str(cfg["train"].get("selection_metric", "auc_macro"))
     best_score = -1.0

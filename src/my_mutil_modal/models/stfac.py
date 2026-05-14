@@ -7,32 +7,34 @@ from torch import nn
 
 
 class CASSANBlock(nn.Module):
-    """Lightweight coordinated self-attention approximation for CAMV-RNN."""
+    """Coordinated adaptive simplified self-attention used by CAMV-RNN."""
 
-    def __init__(self, dim: int, dropout: float = 0.1) -> None:
+    def __init__(self, dim: int, c: int = 8, dropout: float = 0.1) -> None:
         super().__init__()
+        if dim % c != 0:
+            raise ValueError(f"CASSAN dim={dim} must be divisible by c={c}")
+        self.c = c
+        self.h = dim // c
         self.q = nn.Linear(dim, dim)
         self.k = nn.Linear(dim, dim)
         self.v = nn.Linear(dim, dim)
-        self.channel_gate = nn.Sequential(
-            nn.AdaptiveAvgPool1d(1),
-            nn.Flatten(),
-            nn.Linear(dim, dim // 4),
-            nn.ReLU(inplace=True),
-            nn.Linear(dim // 4, dim),
-            nn.Sigmoid(),
-        )
         self.dropout = nn.Dropout(dropout)
         self.norm = nn.LayerNorm(dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        q = self.q(x)
-        k = self.k(x)
-        v = self.v(x)
-        attn = torch.softmax(q @ k.transpose(1, 2), dim=-1)
-        out = attn @ v
-        gate = self.channel_gate(x.transpose(1, 2)).unsqueeze(1)
-        return self.norm(x + self.dropout(out * gate))
+        b, w, dim = x.shape
+        q = self.q(x).view(b, w, self.c, self.h).permute(0, 2, 1, 3)
+        k = self.k(x).view(b, w, self.c, self.h).permute(0, 2, 3, 1)
+        v = self.v(x).view(b, w, self.c, self.h).permute(0, 2, 1, 3)
+        qw = q.mean(dim=3, keepdim=True)
+        kw = k.mean(dim=2, keepdim=True)
+        qc = torch.cat([q, qw], dim=3)
+        kc = torch.cat([k, kw], dim=2)
+        sim = qc @ kc
+        adaptive = qw.expand(-1, -1, -1, w) + kw.expand(-1, -1, w, -1)
+        attn = torch.softmax(sim + adaptive, dim=-1)
+        out = (attn @ v).permute(0, 2, 1, 3).reshape(b, w, dim)
+        return self.norm(x + self.dropout(out))
 
 
 class CAMVRNNBlock(nn.Module):
@@ -42,7 +44,7 @@ class CAMVRNNBlock(nn.Module):
         self.bigru_main = nn.GRU(in_channels, hidden, batch_first=True, bidirectional=True)
         self.bigru_skip = nn.GRU(in_channels, hidden, batch_first=True, bidirectional=True)
         self.bilstm = nn.LSTM(in_channels, hidden, batch_first=True, bidirectional=True)
-        self.cassan = CASSANBlock(dim, dropout)
+        self.cassan = CASSANBlock(dim, c=8, dropout=dropout)
         self.bn = nn.BatchNorm1d(dim)
         self.dropout = nn.Dropout(dropout)
         self.act = nn.ReLU(inplace=True)
@@ -99,41 +101,51 @@ class CBAM(nn.Module):
         return self.spatial(self.channel(x))
 
 
-class ConvBlock(nn.Module):
-    def __init__(self, in_ch: int, out_ch: int, dropout: float, pool: bool = True) -> None:
+class ConvBNAct(nn.Module):
+    def __init__(self, in_ch: int, out_ch: int, dropout: float = 0.0, pool: str | None = None) -> None:
         super().__init__()
-        layers = [
+        self.net = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(dropout),
-        ]
-        if pool:
-            layers.append(nn.MaxPool2d(2))
-        self.net = nn.Sequential(*layers)
+            nn.Dropout2d(dropout) if dropout > 0 else nn.Identity(),
+        )
+        self.pool = pool
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+        x = self.net(x)
+        if self.pool == "max":
+            x = nn.functional.max_pool2d(x, 2)
+        elif self.pool == "avg":
+            x = nn.functional.avg_pool2d(x, 2)
+        elif self.pool == "maxavg":
+            x = 0.5 * (nn.functional.max_pool2d(x, 2) + nn.functional.avg_pool2d(x, 2))
+        return x
 
 
 class CBMVCNNBlock(nn.Module):
-    def __init__(self, in_channels: int = 1, channels: int = 128, dropout: float = 0.2) -> None:
+    def __init__(self, in_channels: int = 1, channels: int = 576, dropout: float = 0.2) -> None:
         super().__init__()
-        self.stem = nn.Sequential(
-            ConvBlock(in_channels, 32, dropout, pool=True),
-            ConvBlock(32, 64, dropout, pool=True),
-            ConvBlock(64, channels, dropout, pool=True),
-        )
-        self.cbam = CBAM(channels)
-        self.tail = nn.Sequential(
-            ConvBlock(channels, channels, dropout, pool=True),
-            ConvBlock(channels, channels, dropout, pool=False),
-        )
+        c1, c2, c3, c4, c5, c6 = 64, 128, 256, 512, channels, channels
+        self.conv1 = ConvBNAct(in_channels, c1, pool="maxavg")
+        self.conv2a = ConvBNAct(c1, c2)
+        self.conv2b = ConvBNAct(c2, c2)
+        self.conv3 = ConvBNAct(c2, c3, dropout=dropout)
+        self.conv4 = ConvBNAct(c3, c4, dropout=dropout, pool="max")
+        self.cbam = CBAM(c4)
+        self.conv5 = ConvBNAct(c4, c5, dropout=dropout)
+        self.conv6 = ConvBNAct(c5, c6)
+        self.out_channels = c6
 
     def forward(self, image: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = self.stem(image)
+        x = self.conv1(image)
+        x = self.conv2a(x)
+        x = self.conv2b(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
         x = self.cbam(x) + x
-        x = self.tail(x)
+        x = self.conv5(x)
+        x = self.conv6(x)
         height_pool = torch.cat([x.amax(dim=2), x.mean(dim=2)], dim=-1)
         spatial = torch.cat([height_pool.amax(dim=2), height_pool.mean(dim=2)], dim=-1)
         return x, spatial
@@ -174,13 +186,13 @@ class CBMVCNNClassifier(nn.Module):
         self,
         num_classes: int,
         image_in_channels: int = 3,
-        image_channels: int = 128,
+        image_channels: int = 576,
         fusion_dim: int = 512,
         dropout: float = 0.2,
     ) -> None:
         super().__init__()
         self.cbmv = CBMVCNNBlock(in_channels=image_in_channels, channels=image_channels, dropout=dropout)
-        spatial_dim = image_channels * 2
+        spatial_dim = self.cbmv.out_channels * 2
         self.classifier = nn.Sequential(
             nn.BatchNorm1d(spatial_dim),
             nn.Dropout(dropout),
@@ -204,7 +216,7 @@ class STFACECGNet(nn.Module):
         num_classes: int,
         image_in_channels: int = 3,
         signal_hidden: int = 64,
-        image_channels: int = 128,
+        image_channels: int = 576,
         fusion_dim: int = 512,
         dropout: float = 0.2,
     ) -> None:
@@ -212,7 +224,7 @@ class STFACECGNet(nn.Module):
         self.camv = CAMVRNNBlock(in_channels=12, hidden=signal_hidden, dropout=dropout)
         self.cbmv = CBMVCNNBlock(in_channels=image_in_channels, channels=image_channels, dropout=dropout)
         temporal_dim = signal_hidden * 4
-        spatial_dim = image_channels * 2
+        spatial_dim = self.cbmv.out_channels * 2
         self.fusion = nn.Sequential(
             nn.BatchNorm1d(temporal_dim + spatial_dim),
             nn.Dropout(dropout),

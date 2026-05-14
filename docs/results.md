@@ -6,7 +6,7 @@ This file is the running result table for local experiments. Outputs are stored 
 
 The STFAC-ECGNet paper is used as the baseline reference. Rows marked `(ours)` in the paper are local reproduction targets on our organized data. Citation-labelled comparison rows are treated as `paper_reported`, because the paper does not provide enough implementation or same-rendering details to establish that the authors reran them all on their generated grayscale images.
 
-Local STFAC runs are method-level reproductions, not bit-level reproductions of the unpublished paper code/image renderer.
+The intended local reproduction differs from the paper only in the image data source. Any remaining deviations are tracked explicitly in `docs/baseline_reproduction.md`.
 
 ## PTB-XL Table
 
@@ -30,14 +30,14 @@ Use `accuracy_label` for paper-table comparison. `accuracy_sample` is stricter e
 | LightX3ECG | paper-reported | reference | 0.920 | 0.734 | 0.920 | 0.734 | 0.884 | STFAC Table 2 |
 | 1D-ECGNet | paper-reported | reference | 0.919 | 0.736 | 0.919 | 0.736 | 0.884 | STFAC Table 2 |
 | 2D-ECGNet | paper-reported | reference | 0.929 | 0.770 | 0.929 | 0.770 | 0.892 | STFAC Table 2 |
-| CAMV-RNN | local reproduction | complete | 0.8717 | 0.5433 | 0.8785 | 0.5369 | 0.9039 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
-| CBMV-CNN | local reproduction | complete | 0.8897 | 0.6167 | 0.8915 | 0.5790 | 0.9009 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
-| STFAC-ECGNet | local reproduction | running | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
+| CAMV-RNN | paper-method local reproduction | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
+| CBMV-CNN | paper-method local reproduction | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
+| STFAC-ECGNet | paper-method local reproduction | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
 | HiFuse DDP finetune | local method | complete | 0.9112 | 0.7286 | 0.9069 | 0.7086 | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_ddp_finetune` |
 | HiFuse adapter-only | local method | complete | 0.9143 | 0.7324 | 0.9105 | 0.7154 | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only` |
 
 ## Notes
 
-- Current local reproduction results are far below the STFAC paper's reported `(ours)` rows, so they must be reported as our implementation/data-contract reproduction, not as successful exact replication of the paper.
+- The previous approximate baseline metrics were invalidated after architecture and training-protocol tightening, so the paper-method rows are pending rerun.
 - The intended mismatch is only image data: the paper used its own generated ECG images, while this project uses our organized 12-lead ECG images.
-- The current STFAC blocks are compact implementations of the described architecture, not unpublished paper code. The next reproduction pass should tighten architecture details against the paper figures and text.
+- Earlier approximate baseline runs were moved under `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/approx_v0/` and are not used for fair comparison.
