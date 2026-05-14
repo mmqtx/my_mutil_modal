@@ -4,6 +4,7 @@ from typing import Dict, Tuple
 
 import torch
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 
 
 class CASSANBlock(nn.Module):
@@ -124,8 +125,9 @@ class ConvBNAct(nn.Module):
 
 
 class CBMVCNNBlock(nn.Module):
-    def __init__(self, in_channels: int = 1, channels: int = 576, dropout: float = 0.2) -> None:
+    def __init__(self, in_channels: int = 1, channels: int = 576, dropout: float = 0.2, use_checkpoint: bool = False) -> None:
         super().__init__()
+        self.use_checkpoint = use_checkpoint
         c1, c2, c3, c4, c5, c6 = 64, 128, 256, 512, channels, channels
         self.conv1 = ConvBNAct(in_channels, c1, pool="maxavg")
         self.conv2a = ConvBNAct(c1, c2)
@@ -137,15 +139,23 @@ class CBMVCNNBlock(nn.Module):
         self.conv6 = ConvBNAct(c5, c6)
         self.out_channels = c6
 
+    def _run(self, module: nn.Module, x: torch.Tensor) -> torch.Tensor:
+        if self.training and self.use_checkpoint:
+            return checkpoint(module, x, use_reentrant=False)
+        return module(x)
+
     def forward(self, image: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = self.conv1(image)
-        x = self.conv2a(x)
-        x = self.conv2b(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-        x = self.cbam(x) + x
-        x = self.conv5(x)
-        x = self.conv6(x)
+        x = self._run(self.conv1, image)
+        x = self._run(self.conv2a, x)
+        x = self._run(self.conv2b, x)
+        x = self._run(self.conv3, x)
+        x = self._run(self.conv4, x)
+        if self.training and self.use_checkpoint:
+            x = checkpoint(lambda y: self.cbam(y) + y, x, use_reentrant=False)
+        else:
+            x = self.cbam(x) + x
+        x = self._run(self.conv5, x)
+        x = self._run(self.conv6, x)
         height_pool = torch.cat([x.amax(dim=2), x.mean(dim=2)], dim=-1)
         spatial = torch.cat([height_pool.amax(dim=2), height_pool.mean(dim=2)], dim=-1)
         return x, spatial
@@ -189,9 +199,15 @@ class CBMVCNNClassifier(nn.Module):
         image_channels: int = 576,
         fusion_dim: int = 512,
         dropout: float = 0.2,
+        use_checkpoint: bool = False,
     ) -> None:
         super().__init__()
-        self.cbmv = CBMVCNNBlock(in_channels=image_in_channels, channels=image_channels, dropout=dropout)
+        self.cbmv = CBMVCNNBlock(
+            in_channels=image_in_channels,
+            channels=image_channels,
+            dropout=dropout,
+            use_checkpoint=use_checkpoint,
+        )
         spatial_dim = self.cbmv.out_channels * 2
         self.classifier = nn.Sequential(
             nn.BatchNorm1d(spatial_dim),
@@ -219,10 +235,16 @@ class STFACECGNet(nn.Module):
         image_channels: int = 576,
         fusion_dim: int = 512,
         dropout: float = 0.2,
+        use_checkpoint: bool = False,
     ) -> None:
         super().__init__()
         self.camv = CAMVRNNBlock(in_channels=12, hidden=signal_hidden, dropout=dropout)
-        self.cbmv = CBMVCNNBlock(in_channels=image_in_channels, channels=image_channels, dropout=dropout)
+        self.cbmv = CBMVCNNBlock(
+            in_channels=image_in_channels,
+            channels=image_channels,
+            dropout=dropout,
+            use_checkpoint=use_checkpoint,
+        )
         temporal_dim = signal_hidden * 4
         spatial_dim = self.cbmv.out_channels * 2
         self.fusion = nn.Sequential(

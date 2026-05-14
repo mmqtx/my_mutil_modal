@@ -48,6 +48,7 @@ Paper-aligned settings currently enforced:
 - Learning rate `3e-3`, batch size `128`, epochs `10`, OneCycleLR cosine schedule.
 - PTB-XL 100 Hz signals, expert-recommended split, 2.5 s sliding window with 50% overlap.
 - Multi-label one-hot targets, F1 model selection, adaptive thresholds in `[0,1]`, no argmax.
+- Activation checkpointing is enabled for the large CBMV image branch to fit the paper batch size on local GPUs; this changes memory use, not the model function.
 
 For paper-table comparison, use `*_accuracy_label`, not `*_accuracy_sample`. `accuracy_label` matches the paper's TP/TN/FP/FN-style binary accuracy over label decisions, while `accuracy_sample` is stricter exact-match accuracy over all labels in one ECG.
 

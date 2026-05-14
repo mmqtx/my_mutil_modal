@@ -78,6 +78,7 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
             image_channels=int(model_cfg.get("image_channels", 128)),
             fusion_dim=int(model_cfg.get("fusion_dim", 512)),
             dropout=float(model_cfg.get("dropout", 0.2)),
+            use_checkpoint=bool(model_cfg.get("use_checkpoint", False)),
         )
         return model.to(device)
     if model_name == "stfac":
@@ -88,6 +89,7 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
             image_channels=int(model_cfg.get("image_channels", 128)),
             fusion_dim=int(model_cfg.get("fusion_dim", 512)),
             dropout=float(model_cfg.get("dropout", 0.2)),
+            use_checkpoint=bool(model_cfg.get("use_checkpoint", False)),
         )
         return model.to(device)
     model = HiFuseECG(

@@ -20,6 +20,7 @@ model:
   image_channels: 572
   fusion_dim: 256
   dropout: 0.20
+  use_checkpoint: true
   contrastive_weight: 0.0
   modality_dropout: 0.0
 
