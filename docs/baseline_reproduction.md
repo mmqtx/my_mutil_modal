@@ -37,6 +37,8 @@ These use the paper-aligned settings: PTB-XL 100 Hz windows, 2.5 s windows with 
 
 The image branch uses GenECG Dataset A RGB images. We do not force grayscale conversion because the project data contract is to reproduce the baseline method on our prepared multimodal dataset, not to recreate the paper's exact image renderer.
 
+For paper-table comparison, use `*_accuracy_label`, not `*_accuracy_sample`. `accuracy_label` matches the paper's TP/TN/FP/FN-style binary accuracy over label decisions, while `accuracy_sample` is stricter exact-match accuracy over all labels in one ECG.
+
 ## Running
 
 Single GPU:

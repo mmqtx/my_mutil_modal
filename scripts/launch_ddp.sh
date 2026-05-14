@@ -33,7 +33,7 @@ SESSION_NAME="$(basename "$OUTPUT_DIR")_ddp"
 
 screen -S "$SESSION_NAME" -X quit >/dev/null 2>&1 || true
 screen -dmS "$SESSION_NAME" bash -lc "
-  set -euo pipefail
+  set -uo pipefail
   echo running > '$STATUS'
   source ~/anaconda3/etc/profile.d/conda.sh
   conda activate pytorch
