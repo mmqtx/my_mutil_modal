@@ -1,0 +1,42 @@
+seed: 2044
+output_dir: /data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet_gray
+
+data:
+  dataset_type: ptbxl_windows
+  root: /data/ljq24358/mutil_modal_datasets
+  manifest: /data/ljq24358/mutil_modal_datasets/ptb-xl/processed/ptbxl_multimodal_manifest.csv
+  window_manifest: /data/ljq24358/mutil_modal_datasets/ptb-xl/processed/ptbxl_signal_windows_2p5s.csv
+  label_columns: [NORM, CD, MI, HYP, STTC]
+  signal_column: signal_lr_path
+  image_column: image_path
+  image_size: 224
+  image_channels: 1
+  use_signals: true
+  use_images: true
+
+model:
+  name: stfac
+  image_in_channels: 1
+  signal_hidden: 256
+  image_channels: 128
+  fusion_dim: 256
+  dropout: 0.20
+  contrastive_weight: 0.0
+  modality_dropout: 0.0
+
+train:
+  epochs: 10
+  batch_size: 128
+  num_workers: 8
+  lr: 0.003
+  weight_decay: 0.0001
+  scheduler: onecycle
+  onecycle_pct_start: 0.3
+  amp: true
+  loss: bce
+  selection_metric: f1_macro
+  grad_clip_norm: 1.0
+  early_stop_patience: 10
+
+eval:
+  aggregate_windows: true

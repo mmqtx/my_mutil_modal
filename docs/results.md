@@ -31,12 +31,15 @@ Use `accuracy_label` for paper-table comparison. `accuracy_sample` is stricter e
 | 1D-ECGNet | paper-reported | reference | 0.919 | 0.736 | 0.919 | 0.736 | 0.884 | STFAC Table 2 |
 | 2D-ECGNet | paper-reported | reference | 0.929 | 0.770 | 0.929 | 0.770 | 0.892 | STFAC Table 2 |
 | CAMV-RNN | local reproduction | complete | 0.8717 | 0.5433 | 0.8785 | 0.5369 | 0.9039 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
-| CBMV-CNN | local reproduction | complete | 0.8897 | 0.6167 | 0.8915 | 0.5790 | 0.9009 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
-| STFAC-ECGNet | local reproduction | running | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
+| CBMV-CNN RGB | local reproduction | complete | 0.8897 | 0.6167 | 0.8915 | 0.5790 | 0.9009 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
+| STFAC-ECGNet RGB | local reproduction | running | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
+| CBMV-CNN grayscale | paper-aligned local reproduction | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn_gray` |
+| STFAC-ECGNet grayscale | paper-aligned local reproduction | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet_gray` |
 | HiFuse DDP finetune | local method | complete | 0.9112 | 0.7286 | 0.9069 | 0.7086 | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_ddp_finetune` |
 | HiFuse adapter-only | local method | complete | 0.9143 | 0.7324 | 0.9105 | 0.7154 | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only` |
 
 ## Notes
 
 - Current local reproduction results are far below the STFAC paper's reported `(ours)` rows, so they must be reported as our implementation/data-contract reproduction, not as successful exact replication of the paper.
-- The main known mismatch is image generation: the paper used its own generated grayscale ECG images, while this project uses GenECG Dataset A. The code also implements a compact, maintainable approximation of the described blocks rather than unpublished paper code.
+- The main known mismatch is image generation: the paper used its own generated grayscale ECG images, while the completed image runs use GenECG Dataset A RGB images. Grayscale follow-up runs are tracked separately, but they still cannot guarantee the paper's exact renderer.
+- The current STFAC blocks are compact implementations of the described architecture, not unpublished paper code. Any claim of full reproduction requires another architecture pass against the paper figures and text.
