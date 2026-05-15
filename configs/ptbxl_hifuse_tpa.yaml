@@ -1,0 +1,46 @@
+seed: 2033
+output_dir: /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa
+
+data:
+  root: /data/ljq24358/mutil_modal_datasets
+  manifest: /data/ljq24358/mutil_modal_datasets/ptb-xl/processed/ptbxl_multimodal_manifest.csv
+  label_columns: [NORM, CD, MI, HYP, STTC]
+  signal_column: signal_hr_path
+  image_column: image_path
+  signal_length: 5000
+  image_size: 336
+  use_images: true
+
+model:
+  signal_checkpoint: pretrained/cpt_wfep_epoch_20.pt
+  init_checkpoint: /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only/best.pt
+  clip_model_path: pretrained/clip-vit-large-patch14-336
+  fusion_dim: 512
+  dropout: 0.12
+  freeze_signal_encoder: true
+  freeze_image_encoder: true
+  token_fusion: false
+  tpa_fusion: true
+  tpa_heads: 8
+  tpa_layers: 1
+  tpa_bidirectional: false
+  label_query_fusion: false
+  signal_local_branch: false
+  modality_dropout: 0.0
+  contrastive_weight: 0.0
+
+train:
+  epochs: 20
+  batch_size: 8
+  num_workers: 4
+  lr: 0.0001
+  encoder_lr: 0.000005
+  weight_decay: 0.02
+  amp: true
+  loss: asymmetric
+  asl_gamma_pos: 0.0
+  asl_gamma_neg: 3.0
+  asl_clip: 0.05
+  grad_clip_norm: 1.0
+  early_stop_patience: 5
+  ddp_find_unused_parameters: false

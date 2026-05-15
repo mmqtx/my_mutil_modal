@@ -60,6 +60,19 @@ def class_pos_weight(cfg: Dict) -> torch.Tensor | None:
     return torch.tensor(neg / np.clip(pos, 1.0, None), dtype=torch.float32)
 
 
+def load_compatible_state_dict(model: torch.nn.Module, state: Dict[str, torch.Tensor]) -> Tuple[list[str], list[str], list[str]]:
+    current = model.state_dict()
+    compatible = {}
+    skipped = []
+    for key, value in state.items():
+        if key in current and current[key].shape == value.shape:
+            compatible[key] = value
+        elif key in current:
+            skipped.append(key)
+    missing, unexpected = model.load_state_dict(compatible, strict=False)
+    return list(missing), list(unexpected), skipped
+
+
 def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) -> HiFuseECG:
     model_cfg = cfg["model"]
     model_name = model_cfg.get("name", "hifuse").lower()
@@ -111,17 +124,27 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
         signal_local_branch=bool(model_cfg.get("signal_local_branch", False)),
         signal_local_channels=int(model_cfg.get("signal_local_channels", 192)),
         signal_local_weight=float(model_cfg.get("signal_local_weight", 0.5)),
+        tpa_fusion=bool(model_cfg.get("tpa_fusion", False)),
+        tpa_heads=int(model_cfg.get("tpa_heads", 8)),
+        tpa_layers=int(model_cfg.get("tpa_layers", 1)),
+        tpa_bidirectional=bool(model_cfg.get("tpa_bidirectional", False)),
     )
     if not no_pretrained and model_cfg.get("signal_checkpoint"):
         load_gem_signal_weights(model, model_cfg["signal_checkpoint"])
     if model_cfg.get("init_checkpoint"):
         ckpt = torch.load(model_cfg["init_checkpoint"], map_location="cpu", weights_only=False)
         state = ckpt.get("model", ckpt)
-        missing, unexpected = model.load_state_dict(state, strict=False)
+        missing, unexpected, skipped = load_compatible_state_dict(model, state)
         print(
             f"Loaded init checkpoint {model_cfg['init_checkpoint']} "
-            f"(missing={len(missing)}, unexpected={len(unexpected)})"
+            f"(missing={len(missing)}, unexpected={len(unexpected)}, skipped_shape={len(skipped)})"
         )
+    if float(model_cfg.get("contrastive_weight", 0.0)) <= 0 and hasattr(model, "signal_contrast"):
+        for module_name in ("signal_contrast", "image_contrast"):
+            module = getattr(model, module_name, None)
+            if module is not None:
+                for param in module.parameters():
+                    param.requires_grad = False
     if bool(model_cfg.get("adapter_only_training", False)):
         model.freeze_base_for_adapter_training()
     return model.to(device)

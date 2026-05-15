@@ -110,6 +110,89 @@ class TokenCrossFusion(nn.Module):
         return self.norm(self.encoder(x)[:, 0])
 
 
+class TemporalPatchAlignment(nn.Module):
+    """Fine-grained signal temporal token to image patch token alignment."""
+
+    def __init__(
+        self,
+        dim: int,
+        heads: int = 8,
+        layers: int = 1,
+        dropout: float = 0.1,
+        bidirectional: bool = False,
+    ) -> None:
+        super().__init__()
+        self.bidirectional = bidirectional
+        self.signal_to_image = nn.ModuleList(
+            [
+                nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
+                for _ in range(layers)
+            ]
+        )
+        self.signal_norms = nn.ModuleList([nn.LayerNorm(dim) for _ in range(layers)])
+        self.signal_ffn = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, dim * 4),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim * 4, dim),
+        )
+        if bidirectional:
+            self.image_to_signal = nn.ModuleList(
+                [
+                    nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
+                    for _ in range(layers)
+                ]
+            )
+            self.image_norms = nn.ModuleList([nn.LayerNorm(dim) for _ in range(layers)])
+            self.image_ffn = nn.Sequential(
+                nn.LayerNorm(dim),
+                nn.Linear(dim, dim * 4),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(dim * 4, dim),
+            )
+        else:
+            self.image_to_signal = None
+            self.image_norms = None
+            self.image_ffn = None
+        self.output_dim = dim * (4 if bidirectional else 3)
+
+    def forward(self, signal_tokens: torch.Tensor, image_tokens: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        aligned_signal = signal_tokens
+        signal_attn = None
+        for attn, norm in zip(self.signal_to_image, self.signal_norms):
+            query = norm(aligned_signal)
+            attended, signal_attn = attn(query, image_tokens, image_tokens, need_weights=False)
+            aligned_signal = aligned_signal + attended
+        aligned_signal = aligned_signal + self.signal_ffn(aligned_signal)
+
+        f_signal = signal_tokens.mean(dim=1)
+        f_aligned_signal = aligned_signal.mean(dim=1)
+        f_image = image_tokens.mean(dim=1)
+        features = [f_signal, f_aligned_signal, f_image]
+        aux: Dict[str, torch.Tensor] = {"signal_aligned_tokens": aligned_signal}
+
+        if self.bidirectional:
+            assert self.image_to_signal is not None
+            assert self.image_norms is not None
+            assert self.image_ffn is not None
+            aligned_image = image_tokens
+            image_attn = None
+            for attn, norm in zip(self.image_to_signal, self.image_norms):
+                query = norm(aligned_image)
+                attended, image_attn = attn(query, signal_tokens, signal_tokens, need_weights=False)
+                aligned_image = aligned_image + attended
+            aligned_image = aligned_image + self.image_ffn(aligned_image)
+            features.append(aligned_image.mean(dim=1))
+            aux["image_aligned_tokens"] = aligned_image
+            if image_attn is not None:
+                aux["image_to_signal_attn"] = image_attn
+        if signal_attn is not None:
+            aux["signal_to_image_attn"] = signal_attn
+        return torch.cat(features, dim=-1), aux
+
+
 class LabelQueryDecoder(nn.Module):
     """Use one learnable query per diagnosis to read cross-modal token evidence."""
 
@@ -229,6 +312,10 @@ class HiFuseECG(nn.Module):
         signal_local_branch: bool = False,
         signal_local_channels: int = 192,
         signal_local_weight: float = 0.5,
+        tpa_fusion: bool = False,
+        tpa_heads: int = 8,
+        tpa_layers: int = 1,
+        tpa_bidirectional: bool = False,
     ) -> None:
         super().__init__()
         self.signal_encoder = EcgTransformer(
@@ -245,6 +332,7 @@ class HiFuseECG(nn.Module):
         self.token_fusion_enabled = token_fusion
         self.label_query_enabled = label_query_fusion
         self.signal_local_enabled = signal_local_branch
+        self.tpa_enabled = tpa_fusion
 
         if freeze_signal_encoder:
             self.signal_encoder.lock(unlocked_groups=signal_unlocked_groups)
@@ -272,6 +360,17 @@ class HiFuseECG(nn.Module):
             heads=token_fusion_heads,
             layers=token_fusion_layers,
             dropout=dropout,
+        )
+        self.tpa = (
+            TemporalPatchAlignment(
+                fusion_dim,
+                heads=tpa_heads,
+                layers=tpa_layers,
+                dropout=dropout,
+                bidirectional=tpa_bidirectional,
+            )
+            if tpa_fusion
+            else None
         )
         self.label_query_decoder = (
             LabelQueryDecoder(
@@ -307,10 +406,29 @@ class HiFuseECG(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(fusion_dim, num_classes),
         )
+        self.tpa_classifier = (
+            nn.Sequential(
+                nn.LayerNorm(self.tpa.output_dim),
+                nn.Linear(self.tpa.output_dim, fusion_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(fusion_dim, num_classes),
+            )
+            if tpa_fusion and self.tpa is not None
+            else None
+        )
         self.signal_contrast = nn.Linear(512, fusion_dim)
         self.image_contrast = nn.Linear(self.image_encoder.hidden_size, fusion_dim)
         self.logit_scale = nn.Parameter(torch.tensor(2.6592), requires_grad=False)
         self.adapter_only_training = False
+        if not (token_fusion or tpa_fusion):
+            for module in (self.signal_token_proj, self.image_token_proj, self.token_fusion):
+                for param in module.parameters():
+                    param.requires_grad = False
+        if tpa_fusion:
+            for module in (self.signal_proj, self.image_proj, self.fusion, self.classifier, self.token_fusion):
+                for param in module.parameters():
+                    param.requires_grad = False
 
     def freeze_base_for_adapter_training(self) -> None:
         self.adapter_only_training = True
@@ -320,6 +438,8 @@ class HiFuseECG(nn.Module):
             "signal_local_encoder",
             "signal_local_classifier",
             "signal_local_weight",
+            "tpa",
+            "tpa_classifier",
         )
         for name, param in self.named_parameters():
             param.requires_grad = name.startswith(trainable_prefixes)
@@ -356,7 +476,7 @@ class HiFuseECG(nn.Module):
         image: torch.Tensor,
         modality_dropout: float = 0.0,
     ) -> Dict[str, torch.Tensor]:
-        if self.token_fusion_enabled:
+        if self.token_fusion_enabled or self.tpa_enabled:
             sig_raw, sig_tokens_raw = self._encode_signal_tokens(signal)
             img_tokens_raw = self.image_encoder.forward_tokens(image)
             img_raw = img_tokens_raw[:, 0]
@@ -378,9 +498,29 @@ class HiFuseECG(nn.Module):
             assert self.signal_local_weight is not None
             local_feat = self.signal_local_encoder(signal)
             fused = fused + self.signal_local_weight * local_feat
-        if self.token_fusion_enabled:
+        if self.token_fusion_enabled or self.tpa_enabled:
             sig_tokens = self.signal_token_proj(sig_tokens_raw[:, 1:])
             img_tokens = self.image_token_proj(img_tokens_raw[:, 1:])
+        if self.tpa_enabled:
+            assert self.tpa is not None
+            assert self.tpa_classifier is not None
+            tpa_feat, tpa_aux = self.tpa(sig_tokens, img_tokens)
+            logits = self.tpa_classifier(tpa_feat)
+            if local_feat is not None:
+                assert self.signal_local_classifier is not None
+                assert self.signal_local_weight is not None
+                logits = logits + self.signal_local_weight * self.signal_local_classifier(local_feat)
+            sig_z = F.normalize(self.signal_contrast(sig_raw), dim=-1)
+            img_z = F.normalize(self.image_contrast(img_raw), dim=-1)
+            return {
+                "logits": logits,
+                "signal_z": sig_z,
+                "image_z": img_z,
+                "fusion_gate": gate,
+                "logit_scale": self.logit_scale,
+                **tpa_aux,
+            }
+        if self.token_fusion_enabled:
             fused = fused + self.token_fusion(sig_tokens, img_tokens)
         logits = self.classifier(fused)
         if self.label_query_enabled:

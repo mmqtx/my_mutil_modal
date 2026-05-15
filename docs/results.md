@@ -35,6 +35,8 @@ Columns match STFAC-ECGNet Table 2. Local Accuracy is `accuracy_label`, i.e. `(T
 | STFAC-ECGNet | paper-method local reproduction | complete | 0.8170 | 0.7834 | 0.5363 | 0.3454 | 0.4049 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
 | HiFuse DDP finetune | local method | complete | pending | 0.9069 | pending | pending | 0.7086 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_ddp_finetune` |
 | HiFuse adapter-only | local method | complete | pending | 0.9105 | pending | pending | 0.7154 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only` |
+| HiFuse + TPA | local method | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa` |
+| HiFuse + TPA bidirectional | local method | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa_bidir` |
 
 ## Notes
 
