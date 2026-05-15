@@ -30,7 +30,7 @@ Columns match STFAC-ECGNet Table 2. Local Accuracy is `accuracy_label`, i.e. `(T
 | LightX3ECG | paper-reported | reference | 0.884 | 0.920 | 0.681 | 0.795 | 0.734 | STFAC Table 2 |
 | 1D-ECGNet | paper-reported | reference | 0.884 | 0.919 | 0.696 | 0.780 | 0.736 | STFAC Table 2 |
 | 2D-ECGNet | paper-reported | reference | 0.892 | 0.929 | 0.790 | 0.752 | 0.770 | STFAC Table 2 |
-| CAMV-RNN | paper-method local reproduction | pending rerun | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
+| CAMV-RNN | paper-method local reproduction | complete | 0.8110 | 0.7859 | 0.5508 | 0.3445 | 0.4061 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
 | CBMV-CNN | paper-method local reproduction | complete | 0.7843 | 0.8032 | 0.6578 | 0.3906 | 0.4557 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
 | STFAC-ECGNet | paper-method local reproduction | pending rerun | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
 | HiFuse DDP finetune | local method | complete | pending | 0.9069 | pending | pending | 0.7086 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_ddp_finetune` |
