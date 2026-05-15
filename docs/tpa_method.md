@@ -36,6 +36,7 @@ L = L_cls + lambda_align * L_time_align
 ## Configs
 
 - `configs/ptbxl_hifuse_tpa.yaml`: single-direction structure-aware signal-to-image TPA.
+- `configs/ptbxl_hifuse_tpa_timebias_only.yaml`: ablation that keeps time-biased attention and removes time-region contrastive alignment loss.
 - `configs/ptbxl_hifuse_tpa_bidir.yaml`: bidirectional structure-aware TPA, adding image-to-signal alignment.
 - `configs/ptbxl_hifuse_tpa_free.yaml`: archived free-attention TPA config for reproducing the completed non-structure-aware run.
 

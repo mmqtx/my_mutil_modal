@@ -37,6 +37,7 @@ Columns match STFAC-ECGNet Table 2. Local Accuracy is `accuracy_label`, i.e. `(T
 | HiFuse adapter-only | local method | complete | pending | 0.9105 | pending | pending | 0.7154 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only` |
 | HiFuse + TPA (free attention) | local method | complete | 0.8629 | 0.9070 | 0.7496 | 0.6758 | 0.7097 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa` |
 | HiFuse + structure-aware TPA | local method | complete | 0.8679 | 0.9025 | 0.7054 | 0.7121 | 0.7063 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa_structure_aware` |
+| HiFuse + time-bias TPA w/o align loss | local method | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa_timebias_only` |
 | HiFuse + structure-aware TPA bidirectional | local method | pending | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa_structure_aware_bidir` |
 
 ## Notes

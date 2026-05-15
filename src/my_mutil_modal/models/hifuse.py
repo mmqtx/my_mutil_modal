@@ -163,6 +163,7 @@ class TemporalPatchAlignment(nn.Module):
         structure_aware: bool = False,
         time_bias_alpha: float = 4.0,
         align_temperature: float = 0.07,
+        compute_align_loss: bool = True,
         image_grid_size: Tuple[int, int] | None = None,
     ) -> None:
         super().__init__()
@@ -170,6 +171,7 @@ class TemporalPatchAlignment(nn.Module):
         self.structure_aware = structure_aware
         self.time_bias_alpha = float(time_bias_alpha)
         self.align_temperature = float(align_temperature)
+        self.compute_align_loss = compute_align_loss
         self.image_grid_size = image_grid_size
         self.signal_to_image = nn.ModuleList(
             [
@@ -278,7 +280,7 @@ class TemporalPatchAlignment(nn.Module):
         f_image = image_tokens.mean(dim=1)
         features = [f_signal, f_aligned_signal, f_image]
         aux: Dict[str, torch.Tensor] = {"signal_aligned_tokens": aligned_signal}
-        if self.structure_aware:
+        if self.structure_aware and self.compute_align_loss:
             aux["time_align_loss"] = self._time_region_contrastive_loss(signal_tokens, image_tokens)
 
         if self.bidirectional:
@@ -430,6 +432,7 @@ class HiFuseECG(nn.Module):
         tpa_structure_aware: bool = False,
         tpa_time_bias_alpha: float = 4.0,
         tpa_align_temperature: float = 0.07,
+        tpa_compute_align_loss: bool = True,
     ) -> None:
         super().__init__()
         self.signal_encoder = EcgTransformer(
@@ -485,6 +488,7 @@ class HiFuseECG(nn.Module):
                 structure_aware=tpa_structure_aware,
                 time_bias_alpha=tpa_time_bias_alpha,
                 align_temperature=tpa_align_temperature,
+                compute_align_loss=tpa_compute_align_loss,
                 image_grid_size=self.image_encoder.grid_size,
             )
             if tpa_fusion

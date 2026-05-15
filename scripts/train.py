@@ -131,6 +131,7 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
         tpa_structure_aware=bool(model_cfg.get("tpa_structure_aware", False)),
         tpa_time_bias_alpha=float(model_cfg.get("tpa_time_bias_alpha", 4.0)),
         tpa_align_temperature=float(model_cfg.get("tpa_align_temperature", 0.07)),
+        tpa_compute_align_loss=float(model_cfg.get("lambda_align", 0.0)) > 0,
     )
     if not no_pretrained and model_cfg.get("signal_checkpoint"):
         load_gem_signal_weights(model, model_cfg["signal_checkpoint"])
