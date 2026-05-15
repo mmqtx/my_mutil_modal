@@ -10,34 +10,34 @@ The intended local reproduction differs from the paper only in the image data so
 
 ## PTB-XL Table
 
-Use `accuracy_label` for paper-table comparison. `accuracy_sample` is stricter exact-match accuracy and is tracked only as an auxiliary metric.
+Columns match STFAC-ECGNet Table 2. Local Accuracy is `accuracy_label`, i.e. `(TP + TN) / (TP + FP + FN + TN)` over binary label decisions. Recall, Precision, F1-score, and AUC are macro averages across the five PTB-XL superclass labels.
 
-| Model | Source | Status | Best Val AUC | Best Val F1 | Test AUC | Test F1 | Test Accuracy | Output |
+| Model | Source | Status | Accuracy | AUC | Recall | Precision | F1-score | Output |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Xresnet1d101 | paper-reported | reference | 0.929 | 0.741 | 0.929 | 0.741 | 0.885 | STFAC Table 2 |
-| FCN-Wang | paper-reported | reference | 0.926 | 0.756 | 0.926 | 0.756 | 0.880 | STFAC Table 2 |
-| LSTM | paper-reported | reference | 0.927 | 0.750 | 0.927 | 0.750 | 0.876 | STFAC Table 2 |
-| ResNet-Wang | paper-reported | reference | 0.749 | 0.751 | 0.749 | 0.751 | 0.877 | STFAC Table 2 |
-| Inception1d | paper-reported | reference | 0.926 | 0.748 | 0.926 | 0.748 | 0.876 | STFAC Table 2 |
-| ECG-DNN | paper-reported | reference | 0.924 | 0.734 | 0.924 | 0.734 | 0.884 | STFAC Table 2 |
-| DNN-zhu | paper-reported | reference | 0.918 | 0.766 | 0.918 | 0.766 | 0.890 | STFAC Table 2 |
-| Resnet34_1d | paper-reported | reference | 0.908 | 0.732 | 0.908 | 0.732 | 0.882 | STFAC Table 2 |
-| Resnet34_2d | paper-reported | reference | 0.911 | 0.714 | 0.911 | 0.714 | 0.879 | STFAC Table 2 |
-| Image_CNN | paper-reported | reference | 0.921 | 0.742 | 0.921 | 0.742 | 0.888 | STFAC Table 2 |
-| SincNet | paper-reported | reference | 0.910 | 0.687 | 0.910 | 0.687 | 0.765 | STFAC Table 2 |
-| SE-ResNet1 | paper-reported | reference | 0.889 | 0.667 | 0.889 | 0.667 | 0.862 | STFAC Table 2 |
-| SE-ResNet12 | paper-reported | reference | 0.923 | 0.731 | 0.923 | 0.731 | 0.880 | STFAC Table 2 |
-| LightX3ECG | paper-reported | reference | 0.920 | 0.734 | 0.920 | 0.734 | 0.884 | STFAC Table 2 |
-| 1D-ECGNet | paper-reported | reference | 0.919 | 0.736 | 0.919 | 0.736 | 0.884 | STFAC Table 2 |
-| 2D-ECGNet | paper-reported | reference | 0.929 | 0.770 | 0.929 | 0.770 | 0.892 | STFAC Table 2 |
-| CAMV-RNN | paper-method local reproduction | complete | 0.8053 | 0.4435 | 0.7948 | 0.4061 | 0.8409 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
-| CBMV-CNN | paper-method local reproduction | complete | 0.8156 | 0.4691 | 0.8032 | 0.4557 | 0.7843 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
-| STFAC-ECGNet | paper-method local reproduction | complete | 0.8114 | 0.4450 | 0.8022 | 0.4088 | 0.8459 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
-| HiFuse DDP finetune | local method | complete | 0.9112 | 0.7286 | 0.9069 | 0.7086 | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_ddp_finetune` |
-| HiFuse adapter-only | local method | complete | 0.9143 | 0.7324 | 0.9105 | 0.7154 | pending | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only` |
+| Xresnet1d101 | paper-reported | reference | 0.885 | 0.929 | 0.705 | 0.780 | 0.741 | STFAC Table 2 |
+| FCN-Wang | paper-reported | reference | 0.880 | 0.926 | 0.786 | 0.729 | 0.756 | STFAC Table 2 |
+| LSTM | paper-reported | reference | 0.876 | 0.927 | 0.800 | 0.706 | 0.750 | STFAC Table 2 |
+| ResNet-Wang | paper-reported | reference | 0.877 | 0.749 | 0.795 | 0.712 | 0.751 | STFAC Table 2 |
+| Inception1d | paper-reported | reference | 0.876 | 0.926 | 0.788 | 0.711 | 0.748 | STFAC Table 2 |
+| ECG-DNN | paper-reported | reference | 0.884 | 0.924 | 0.684 | 0.793 | 0.734 | STFAC Table 2 |
+| DNN-zhu | paper-reported | reference | 0.890 | 0.918 | 0.774 | 0.758 | 0.766 | STFAC Table 2 |
+| Resnet34_1d | paper-reported | reference | 0.882 | 0.908 | 0.691 | 0.778 | 0.732 | STFAC Table 2 |
+| Resnet34_2d | paper-reported | reference | 0.879 | 0.911 | 0.706 | 0.722 | 0.714 | STFAC Table 2 |
+| Image_CNN | paper-reported | reference | 0.888 | 0.921 | 0.764 | 0.721 | 0.742 | STFAC Table 2 |
+| SincNet | paper-reported | reference | 0.765 | 0.910 | 0.662 | 0.714 | 0.687 | STFAC Table 2 |
+| SE-ResNet1 | paper-reported | reference | 0.862 | 0.889 | 0.599 | 0.753 | 0.667 | STFAC Table 2 |
+| SE-ResNet12 | paper-reported | reference | 0.880 | 0.923 | 0.694 | 0.772 | 0.731 | STFAC Table 2 |
+| LightX3ECG | paper-reported | reference | 0.884 | 0.920 | 0.681 | 0.795 | 0.734 | STFAC Table 2 |
+| 1D-ECGNet | paper-reported | reference | 0.884 | 0.919 | 0.696 | 0.780 | 0.736 | STFAC Table 2 |
+| 2D-ECGNet | paper-reported | reference | 0.892 | 0.929 | 0.790 | 0.752 | 0.770 | STFAC Table 2 |
+| CAMV-RNN | paper-method local reproduction | pending rerun | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
+| CBMV-CNN | paper-method local reproduction | complete | 0.7843 | 0.8032 | 0.6578 | 0.3906 | 0.4557 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
+| STFAC-ECGNet | paper-method local reproduction | pending rerun | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
+| HiFuse DDP finetune | local method | complete | pending | 0.9069 | pending | pending | 0.7086 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_ddp_finetune` |
+| HiFuse adapter-only | local method | complete | pending | 0.9105 | pending | pending | 0.7154 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only` |
 
 ## Notes
 
-- The previous approximate baseline metrics were invalidated after architecture and training-protocol tightening; the completed paper-method rows above are the current fair-comparison baselines.
+- CAMV-RNN and STFAC-ECGNet are pending rerun after the CAMV branch was tightened to match the paper's batch-dimension global max/average fusion and skip-branch preprocessing.
 - The intended mismatch is only image data: the paper used its own generated ECG images, while this project uses our organized 12-lead ECG images.
 - Earlier approximate baseline runs were moved under `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/approx_v0/` and are not used for fair comparison.

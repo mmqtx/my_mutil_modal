@@ -48,7 +48,14 @@ Paper-aligned settings currently enforced:
 - Learning rate `3e-3`, batch size `128`, epochs `10`, OneCycleLR cosine schedule.
 - PTB-XL 100 Hz signals, expert-recommended split, 2.5 s sliding window with 50% overlap.
 - Multi-label one-hot targets, F1 model selection, adaptive thresholds in `[0,1]`, no argmax.
+- Validation and test metrics are computed at window level. The paper describes sliding windows as augmentation and does not describe ECG-level window aggregation.
 - Activation checkpointing is enabled for the large CBMV image branch to fit the paper batch size on local GPUs; this changes memory use, not the model function.
+
+Open ambiguities from the paper:
+
+- The paper does not explicitly name the loss function. The local reproduction uses BCE-with-logits without class weights, matching the standard FastAI multi-label setup.
+- The paper states FastAI and OneCycleLR, but does not list every OneCycle/Adam parameter. Local configs use FastAI-like Adam, `wd=0.01`, and OneCycle cosine scheduling.
+- CAMV-RNN still has a parameter-count ambiguity: the local implementation follows the disclosed `h=256`, `c=8`, `hMLP=256`, and CAMV branch equations, but the count is below the paper's Table 5 value. The paper does not expose enough layer-level dimensions to resolve this without inventing hidden layers.
 
 For paper-table comparison, use `*_accuracy_label`, not `*_accuracy_sample`. `accuracy_label` matches the paper's TP/TN/FP/FN-style binary accuracy over label decisions, while `accuracy_sample` is stricter exact-match accuracy over all labels in one ECG.
 

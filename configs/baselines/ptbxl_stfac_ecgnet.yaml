@@ -43,4 +43,4 @@ train:
   early_stop_patience: 10
 
 eval:
-  aggregate_windows: true
+  aggregate_windows: false

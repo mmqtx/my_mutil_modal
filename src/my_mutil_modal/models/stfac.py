@@ -46,6 +46,7 @@ class CAMVRNNBlock(nn.Module):
         self.bigru_skip = nn.GRU(in_channels, hidden, batch_first=True, bidirectional=True)
         self.bilstm = nn.LSTM(in_channels, hidden, batch_first=True, bidirectional=True)
         self.cassan = CASSANBlock(dim, c=8, dropout=dropout)
+        self.skip_bn = nn.BatchNorm1d(in_channels)
         self.bn = nn.BatchNorm1d(dim)
         self.dropout = nn.Dropout(dropout)
         self.act = nn.ReLU(inplace=True)
@@ -53,10 +54,14 @@ class CAMVRNNBlock(nn.Module):
     def forward(self, signal: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         x = signal.transpose(1, 2)
         main, _ = self.bigru_main(x)
-        skip, _ = self.bigru_skip(x)
+        upper = main.amax(dim=0, keepdim=True) + main.mean(dim=0, keepdim=True)
+        upper = upper.expand_as(main)
+        skip_in = self.skip_bn(signal).transpose(1, 2)
+        skip_in = self.act(self.dropout(skip_in))
+        skip, _ = self.bigru_skip(skip_in)
         lower, _ = self.bilstm(x)
         lower = self.cassan(lower)
-        fused = main + skip + lower
+        fused = upper + skip + lower
         fused = self.bn(fused.transpose(1, 2)).transpose(1, 2)
         fused = self.act(self.dropout(fused))
         pooled = torch.cat([fused.max(dim=1).values, fused.mean(dim=1)], dim=-1)
