@@ -20,6 +20,9 @@ class CLIPVisionEncoder(nn.Module):
 
         self.vision_model = CLIPVisionModel.from_pretrained(model_path)
         self.hidden_size = int(self.vision_model.config.hidden_size)
+        image_size = int(self.vision_model.config.image_size)
+        patch_size = int(self.vision_model.config.patch_size)
+        self.grid_size = (image_size // patch_size, image_size // patch_size)
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         outputs = self.vision_model(pixel_values=images)
@@ -110,6 +113,43 @@ class TokenCrossFusion(nn.Module):
         return self.norm(self.encoder(x)[:, 0])
 
 
+class TimeBiasedCrossAttention(nn.Module):
+    """Multi-head cross-attention with an additive temporal-position bias."""
+
+    def __init__(self, dim: int, heads: int, dropout: float) -> None:
+        super().__init__()
+        if dim % heads != 0:
+            raise ValueError(f"dim={dim} must be divisible by heads={heads}")
+        self.heads = heads
+        self.head_dim = dim // heads
+        self.q_proj = nn.Linear(dim, dim)
+        self.k_proj = nn.Linear(dim, dim)
+        self.v_proj = nn.Linear(dim, dim)
+        self.out_proj = nn.Linear(dim, dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(
+        self,
+        query_tokens: torch.Tensor,
+        key_tokens: torch.Tensor,
+        query_pos: torch.Tensor,
+        key_pos: torch.Tensor,
+        alpha: float,
+    ) -> torch.Tensor:
+        bsz, q_len, dim = query_tokens.shape
+        k_len = key_tokens.size(1)
+        q = self.q_proj(query_tokens).view(bsz, q_len, self.heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(key_tokens).view(bsz, k_len, self.heads, self.head_dim).transpose(1, 2)
+        v = self.v_proj(key_tokens).view(bsz, k_len, self.heads, self.head_dim).transpose(1, 2)
+
+        logits = torch.matmul(q, k.transpose(-2, -1)) * (self.head_dim ** -0.5)
+        time_bias = -float(alpha) * torch.abs(query_pos[:, None] - key_pos[None, :])
+        logits = logits + time_bias.to(dtype=logits.dtype, device=logits.device).view(1, 1, q_len, k_len)
+        attn = self.dropout(torch.softmax(logits, dim=-1))
+        out = torch.matmul(attn, v).transpose(1, 2).contiguous().view(bsz, q_len, dim)
+        return self.out_proj(out)
+
+
 class TemporalPatchAlignment(nn.Module):
     """Fine-grained signal temporal token to image patch token alignment."""
 
@@ -120,12 +160,22 @@ class TemporalPatchAlignment(nn.Module):
         layers: int = 1,
         dropout: float = 0.1,
         bidirectional: bool = False,
+        structure_aware: bool = False,
+        time_bias_alpha: float = 4.0,
+        align_temperature: float = 0.07,
+        image_grid_size: Tuple[int, int] | None = None,
     ) -> None:
         super().__init__()
         self.bidirectional = bidirectional
+        self.structure_aware = structure_aware
+        self.time_bias_alpha = float(time_bias_alpha)
+        self.align_temperature = float(align_temperature)
+        self.image_grid_size = image_grid_size
         self.signal_to_image = nn.ModuleList(
             [
-                nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
+                TimeBiasedCrossAttention(dim, heads, dropout)
+                if structure_aware
+                else nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
                 for _ in range(layers)
             ]
         )
@@ -140,7 +190,9 @@ class TemporalPatchAlignment(nn.Module):
         if bidirectional:
             self.image_to_signal = nn.ModuleList(
                 [
-                    nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
+                    TimeBiasedCrossAttention(dim, heads, dropout)
+                    if structure_aware
+                    else nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
                     for _ in range(layers)
                 ]
             )
@@ -158,12 +210,66 @@ class TemporalPatchAlignment(nn.Module):
             self.image_ffn = None
         self.output_dim = dim * (4 if bidirectional else 3)
 
+    @staticmethod
+    def _normalized_positions(length: int, device: torch.device) -> torch.Tensor:
+        if length <= 1:
+            return torch.zeros(length, device=device)
+        return torch.linspace(0.0, 1.0, steps=length, device=device)
+
+    def _image_patch_time_positions(self, patch_count: int, device: torch.device) -> torch.Tensor:
+        if self.image_grid_size is not None and self.image_grid_size[0] * self.image_grid_size[1] == patch_count:
+            grid_h, grid_w = self.image_grid_size
+        else:
+            grid_h = int(patch_count ** 0.5)
+            grid_w = patch_count // max(grid_h, 1)
+            if grid_h * grid_w != patch_count:
+                return self._normalized_positions(patch_count, device)
+        x_pos = self._normalized_positions(grid_w, device)
+        return x_pos.repeat(grid_h)
+
+    def _image_time_bins(self, image_tokens: torch.Tensor, target_len: int) -> torch.Tensor:
+        bsz, patch_count, dim = image_tokens.shape
+        if self.image_grid_size is not None and self.image_grid_size[0] * self.image_grid_size[1] == patch_count:
+            grid_h, grid_w = self.image_grid_size
+        else:
+            grid_h = int(patch_count ** 0.5)
+            grid_w = patch_count // max(grid_h, 1)
+            if grid_h * grid_w != patch_count:
+                return F.interpolate(
+                    image_tokens.transpose(1, 2),
+                    size=target_len,
+                    mode="linear",
+                    align_corners=True,
+                ).transpose(1, 2)
+        column_tokens = image_tokens.view(bsz, grid_h, grid_w, dim).mean(dim=1)
+        return F.interpolate(
+            column_tokens.transpose(1, 2),
+            size=target_len,
+            mode="linear",
+            align_corners=True,
+        ).transpose(1, 2)
+
+    def _time_region_contrastive_loss(self, signal_tokens: torch.Tensor, image_tokens: torch.Tensor) -> torch.Tensor:
+        image_bins = self._image_time_bins(image_tokens, signal_tokens.size(1))
+        signal_z = F.normalize(signal_tokens, dim=-1)
+        image_z = F.normalize(image_bins, dim=-1)
+        logits = torch.matmul(signal_z, image_z.transpose(1, 2)) / max(self.align_temperature, 1e-6)
+        labels = torch.arange(signal_tokens.size(1), device=signal_tokens.device).expand(signal_tokens.size(0), -1)
+        loss_s2p = F.cross_entropy(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
+        loss_p2s = F.cross_entropy(logits.transpose(1, 2).reshape(-1, logits.size(1)), labels.reshape(-1))
+        return 0.5 * (loss_s2p + loss_p2s)
+
     def forward(self, signal_tokens: torch.Tensor, image_tokens: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         aligned_signal = signal_tokens
         signal_attn = None
+        signal_pos = self._normalized_positions(signal_tokens.size(1), signal_tokens.device)
+        image_pos = self._image_patch_time_positions(image_tokens.size(1), image_tokens.device)
         for attn, norm in zip(self.signal_to_image, self.signal_norms):
             query = norm(aligned_signal)
-            attended, signal_attn = attn(query, image_tokens, image_tokens, need_weights=False)
+            if self.structure_aware:
+                attended = attn(query, image_tokens, signal_pos, image_pos, self.time_bias_alpha)
+            else:
+                attended, signal_attn = attn(query, image_tokens, image_tokens, need_weights=False)
             aligned_signal = aligned_signal + attended
         aligned_signal = aligned_signal + self.signal_ffn(aligned_signal)
 
@@ -172,6 +278,8 @@ class TemporalPatchAlignment(nn.Module):
         f_image = image_tokens.mean(dim=1)
         features = [f_signal, f_aligned_signal, f_image]
         aux: Dict[str, torch.Tensor] = {"signal_aligned_tokens": aligned_signal}
+        if self.structure_aware:
+            aux["time_align_loss"] = self._time_region_contrastive_loss(signal_tokens, image_tokens)
 
         if self.bidirectional:
             assert self.image_to_signal is not None
@@ -181,7 +289,10 @@ class TemporalPatchAlignment(nn.Module):
             image_attn = None
             for attn, norm in zip(self.image_to_signal, self.image_norms):
                 query = norm(aligned_image)
-                attended, image_attn = attn(query, signal_tokens, signal_tokens, need_weights=False)
+                if self.structure_aware:
+                    attended = attn(query, signal_tokens, image_pos, signal_pos, self.time_bias_alpha)
+                else:
+                    attended, image_attn = attn(query, signal_tokens, signal_tokens, need_weights=False)
                 aligned_image = aligned_image + attended
             aligned_image = aligned_image + self.image_ffn(aligned_image)
             features.append(aligned_image.mean(dim=1))
@@ -316,6 +427,9 @@ class HiFuseECG(nn.Module):
         tpa_heads: int = 8,
         tpa_layers: int = 1,
         tpa_bidirectional: bool = False,
+        tpa_structure_aware: bool = False,
+        tpa_time_bias_alpha: float = 4.0,
+        tpa_align_temperature: float = 0.07,
     ) -> None:
         super().__init__()
         self.signal_encoder = EcgTransformer(
@@ -368,6 +482,10 @@ class HiFuseECG(nn.Module):
                 layers=tpa_layers,
                 dropout=dropout,
                 bidirectional=tpa_bidirectional,
+                structure_aware=tpa_structure_aware,
+                time_bias_alpha=tpa_time_bias_alpha,
+                align_temperature=tpa_align_temperature,
+                image_grid_size=self.image_encoder.grid_size,
             )
             if tpa_fusion
             else None

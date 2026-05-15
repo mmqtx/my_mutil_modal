@@ -1,5 +1,5 @@
-seed: 2034
-output_dir: /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa_structure_aware_bidir
+seed: 2033
+output_dir: /data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_tpa
 
 data:
   root: /data/ljq24358/mutil_modal_datasets
@@ -23,11 +23,8 @@ model:
   tpa_fusion: true
   tpa_heads: 8
   tpa_layers: 1
-  tpa_bidirectional: true
-  tpa_structure_aware: true
-  tpa_time_bias_alpha: 4.0
-  tpa_align_temperature: 0.07
-  lambda_align: 0.05
+  tpa_bidirectional: false
+  tpa_structure_aware: false
   label_query_fusion: false
   signal_local_branch: false
   modality_dropout: 0.0
@@ -47,5 +44,4 @@ train:
   asl_clip: 0.05
   grad_clip_norm: 1.0
   early_stop_patience: 5
-  selection_metric: f1_macro
   ddp_find_unused_parameters: false

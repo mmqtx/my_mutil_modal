@@ -128,6 +128,9 @@ def build_model(cfg: Dict, device: torch.device, no_pretrained: bool = False) ->
         tpa_heads=int(model_cfg.get("tpa_heads", 8)),
         tpa_layers=int(model_cfg.get("tpa_layers", 1)),
         tpa_bidirectional=bool(model_cfg.get("tpa_bidirectional", False)),
+        tpa_structure_aware=bool(model_cfg.get("tpa_structure_aware", False)),
+        tpa_time_bias_alpha=float(model_cfg.get("tpa_time_bias_alpha", 4.0)),
+        tpa_align_temperature=float(model_cfg.get("tpa_align_temperature", 0.07)),
     )
     if not no_pretrained and model_cfg.get("signal_checkpoint"):
         load_gem_signal_weights(model, model_cfg["signal_checkpoint"])
@@ -221,6 +224,7 @@ def run_epoch(
     losses = []
     amp = bool(cfg["train"].get("amp", True)) and device.type == "cuda"
     contrastive_weight = float(cfg["model"].get("contrastive_weight", 0.0))
+    lambda_align = float(cfg["model"].get("lambda_align", 0.0))
     modality_dropout = float(cfg["model"].get("modality_dropout", 0.0)) if train else 0.0
     iterator = tqdm(loader, leave=False, desc="train" if train else "eval", disable=not show_progress)
     for batch in iterator:
@@ -245,6 +249,8 @@ def run_epoch(
                 loss = loss + contrastive_weight * symmetric_contrastive_loss(
                     out["signal_z"], out["image_z"], out["logit_scale"]
                 )
+            if lambda_align > 0 and "time_align_loss" in out:
+                loss = loss + lambda_align * out["time_align_loss"]
         if train:
             assert optimizer is not None
             if scaler is not None and amp:
