@@ -32,12 +32,12 @@ Columns match STFAC-ECGNet Table 2. Local Accuracy is `accuracy_label`, i.e. `(T
 | 2D-ECGNet | paper-reported | reference | 0.892 | 0.929 | 0.790 | 0.752 | 0.770 | STFAC Table 2 |
 | CAMV-RNN | paper-method local reproduction | complete | 0.8110 | 0.7859 | 0.5508 | 0.3445 | 0.4061 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/camv_rnn` |
 | CBMV-CNN | paper-method local reproduction | complete | 0.7843 | 0.8032 | 0.6578 | 0.3906 | 0.4557 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/cbmv_cnn` |
-| STFAC-ECGNet | paper-method local reproduction | pending rerun | pending | pending | pending | pending | pending | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
+| STFAC-ECGNet | paper-method local reproduction | complete | 0.8170 | 0.7834 | 0.5363 | 0.3454 | 0.4049 | `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/stfac_ecgnet` |
 | HiFuse DDP finetune | local method | complete | pending | 0.9069 | pending | pending | 0.7086 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_ddp_finetune` |
 | HiFuse adapter-only | local method | complete | pending | 0.9105 | pending | pending | 0.7154 | `/data/ljq24358/mutil_modal_datasets/experiments/ptbxl_hifuse_adapter_only` |
 
 ## Notes
 
-- CAMV-RNN and STFAC-ECGNet are pending rerun after the CAMV branch was tightened to match the paper's batch-dimension global max/average fusion and skip-branch preprocessing.
+- CAMV-RNN and STFAC-ECGNet were rerun after the CAMV branch was tightened to match the paper's batch-dimension global max/average fusion and skip-branch preprocessing.
 - The intended mismatch is only image data: the paper used its own generated ECG images, while this project uses our organized 12-lead ECG images.
 - Earlier approximate baseline runs were moved under `/data/ljq24358/mutil_modal_datasets/experiments/baselines/ptbxl/approx_v0/` and are not used for fair comparison.
